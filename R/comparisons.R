@@ -179,7 +179,8 @@ get_plot_info <- function(outcome_name, compevent_name, time_name, time_points,
 
   # Calculate mean observed values at each time point for covariates, risk, and survival
   obs_results <- obs_calculate(outcome_name, compevent_name, time_name, covnames, comprisk,
-                               outcome_type, obs_data[obs_data[[time_name]] < time_points])
+                               outcome_type, obs_data[obs_data[[time_name]] < time_points &
+                                                        obs_data[[time_name]] >= 0])
 
   # Calculate mean simulated values at each time point for covariates
   sim_results_cov <- lapply(covnames, FUN = function(covname){
@@ -195,10 +196,11 @@ get_plot_info <- function(outcome_name, compevent_name, time_name, time_points,
   }
 
   # Generate data tables for plotting each covariate
-  dt_cov_plot <- lapply(1:length(covnames), FUN = function(i){
+  dt_cov_plot <- lapply(seq_along(covnames), FUN = function(i){
     covname <- covnames[i]
     if (covtypes[i] == 'categorical'){
-      sub_obs_data <- obs_data[obs_data[[time_name]] < time_points,
+      sub_obs_data <- obs_data[obs_data[[time_name]] < time_points &
+                                 obs_data[[time_name]] >= 0,
                                summary(eval(parse(text = covname))), by = time_name]
       sub_obs_data[, (covname) := rep(levels(obs_data[[covname]]), time_points)]
       sub_obs_data[, 'legend' := 'nonparametric estimates']
@@ -257,7 +259,7 @@ get_plot_info <- function(outcome_name, compevent_name, time_name, time_points,
 #' @import ggplot2
 get_cvgrphs <- function(x, covnames, covtypes, xlab, ylab_cov){
 
-  cvgrphs <- lapply(1:length(covnames), FUN = function(i){
+  cvgrphs <- lapply(seq_along(covnames), FUN = function(i){
     covname <- covnames[i]
     covtype <- covtypes[i]
     comb_cov_data <- x$dt_cov_plot[[covname]]

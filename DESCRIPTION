@@ -1,6 +1,6 @@
 Package: gfoRmula
 Title: Parametric G-Formula
-Version: 0.2.1
+Version: 0.3.0
 Authors@R: c(person("Victoria", "Lin", role = c("aut"), 
                      email = "vlin@alumni.harvard.edu", 
                      comment = "V. Lin and S. McGrath made equal 
@@ -42,14 +42,14 @@ License: GPL-3
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 6.1.1
-Imports: data.table, ggplot2, ggpubr, grDevices, nnet, parallel, stats,
-        stringr, survival, truncnorm, truncreg, utils
+Imports: data.table, ggplot2, ggpubr, grDevices, nnet, parallel,
+        progress, stats, stringr, survival, truncnorm, truncreg, utils
 Suggests: Hmisc
 URL: https://github.com/CausalInference/gfoRmula,
         https://arxiv.org/abs/1908.07072
 BugReports: https://github.com/CausalInference/gfoRmula/issues
 NeedsCompilation: no
-Packaged: 2019-08-24 18:28:59 UTC; Sean
+Packaged: 2020-01-30 05:40:08 UTC; Sean
 Author: Victoria Lin [aut] (V. Lin and S. McGrath made equal contributions),
   Sean McGrath [aut, cre] (<https://orcid.org/0000-0002-7281-3516>, V.
     Lin and S. McGrath made equal contributions),
@@ -63,4 +63,4 @@ Author: Victoria Lin [aut] (V. Lin and S. McGrath made equal contributions),
   2019 The President and Fellows of Harvard College [cph]
 Maintainer: Sean McGrath <sean_mcgrath@g.harvard.edu>
 Repository: CRAN
-Date/Publication: 2019-08-25 07:30:09 UTC
+Date/Publication: 2020-01-30 06:10:08 UTC

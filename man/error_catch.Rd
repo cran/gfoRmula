@@ -8,7 +8,7 @@ error_catch(id, nsimul, intvars, interventions, int_times, int_descript,
   covnames, covtypes, basecovs, histvars, histories, compevent_model,
   hazardratio, intcomp, time_points, outcome_type, time_name, obs_data,
   parallel, ncores, nsamples, sim_data_b, outcome_name, compevent_name,
-  comprisk, covmodels, histvals)
+  comprisk, covmodels, histvals, min_time)
 }
 \arguments{
 \item{id}{Character string specifying the name of the ID variable in \code{obs_data}.}

@@ -10,7 +10,8 @@ bootstrap_helper(r, time_points, obs_data, bootseeds, outcome_type,
   histvals, histories, ymodel, yrestrictions, compevent_restrictions,
   restrictions, comprisk, compevent_model, time_name, outcome_name,
   compevent_name, ranges, yrange, compevent_range, parallel, ncores,
-  max_visits, hazardratio, intcomp, boot_diag, nsimul, baselags)
+  max_visits, hazardratio, intcomp, boot_diag, nsimul, baselags,
+  below_zero_indicator, min_time, show_progress, pb)
 }
 \arguments{
 \item{r}{Integer specifying the index of the current iteration of the bootstrap.}
@@ -134,16 +135,24 @@ process. A value of \code{NA} should be provided when there is no visit process.
 \item{intcomp}{List of two numbers indicating a pair of interventions to be compared by a hazard ratio.
 The default is \code{NA}, resulting in no hazard ratio calculation.}
 
-\item{boot_diag}{Logical scalar indicating whether to return the coefficients of the fitted models and their standard errors in the bootstrap samples.}
+\item{boot_diag}{Logical scalar indicating whether to return the coefficients, standard errors, and variance-covariance matrices of the parameters of the fitted models in the bootstrap samples. The default is \code{FALSE}.}
 
 \item{nsimul}{Number of subjects for whom to simulate data. By default, this argument is set
 equal to the number of subjects in \code{obs_data}.}
 
-\item{baselags}{Logical scalar for specifying the convention used for lagi and lag_cumavgi terms in the model statements when
-the current time index, \eqn{t}, is such that \eqn{t < i}. If this argument is set to \code{FALSE}, the value
+\item{baselags}{Logical scalar for specifying the convention used for lagi and lag_cumavgi terms in the model statements when pre-baseline times are not
+included in \code{obs_data} and when the current time index, \eqn{t}, is such that \eqn{t < i}. If this argument is set to \code{FALSE}, the value
 of all lagi and lag_cumavgi terms in this context are set to 0 (for non-categorical covariates) or the reference
 level (for categorical covariates). If this argument is set to \code{TRUE}, the value of lagi and lag_cumavgi terms
 are set to their values at time 0. The default is \code{FALSE}.}
+
+\item{below_zero_indicator}{Logical scalar indicating whether the observed data set contains rows for time \eqn{t < 0}.}
+
+\item{min_time}{Numeric scalar specifying lowest value of time \eqn{t} in the observed data set.}
+
+\item{show_progress}{Logical scalar indicating whether to print a progress bar for the number of bootstrap samples completed in the R console. This argument is only applicable when \code{parallel} is set to \code{FALSE} and bootstrap samples are used (i.e., \code{nsamples} is set to a value greater than 0). The default is \code{TRUE}.}
+
+\item{pb}{Progress bar R6 object. See \code{\link[progress]{progress_bar}} for further details.}
 }
 \value{
 A list with the following components:

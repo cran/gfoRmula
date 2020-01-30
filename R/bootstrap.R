@@ -91,14 +91,18 @@
 #' @param hazardratio             Logical scalar indicating whether the hazard ratio should be computed between two interventions.
 #' @param intcomp                 List of two numbers indicating a pair of interventions to be compared by a hazard ratio.
 #'                                The default is \code{NA}, resulting in no hazard ratio calculation.
-#' @param boot_diag               Logical scalar indicating whether to return the coefficients of the fitted models and their standard errors in the bootstrap samples.
+#' @param boot_diag               Logical scalar indicating whether to return the coefficients, standard errors, and variance-covariance matrices of the parameters of the fitted models in the bootstrap samples. The default is \code{FALSE}.
 #' @param nsimul                  Number of subjects for whom to simulate data. By default, this argument is set
 #'                                equal to the number of subjects in \code{obs_data}.
-#' @param baselags                Logical scalar for specifying the convention used for lagi and lag_cumavgi terms in the model statements when
-#'                                the current time index, \eqn{t}, is such that \eqn{t < i}. If this argument is set to \code{FALSE}, the value
+#' @param baselags                Logical scalar for specifying the convention used for lagi and lag_cumavgi terms in the model statements when pre-baseline times are not
+#'                                included in \code{obs_data} and when the current time index, \eqn{t}, is such that \eqn{t < i}. If this argument is set to \code{FALSE}, the value
 #'                                of all lagi and lag_cumavgi terms in this context are set to 0 (for non-categorical covariates) or the reference
 #'                                level (for categorical covariates). If this argument is set to \code{TRUE}, the value of lagi and lag_cumavgi terms
 #'                                are set to their values at time 0. The default is \code{FALSE}.
+#' @param below_zero_indicator    Logical scalar indicating whether the observed data set contains rows for time \eqn{t < 0}.
+#' @param min_time                Numeric scalar specifying lowest value of time \eqn{t} in the observed data set.
+#' @param show_progress           Logical scalar indicating whether to print a progress bar for the number of bootstrap samples completed in the R console. This argument is only applicable when \code{parallel} is set to \code{FALSE} and bootstrap samples are used (i.e., \code{nsamples} is set to a value greater than 0). The default is \code{TRUE}.
+#' @param pb                      Progress bar R6 object. See \code{\link[progress]{progress_bar}} for further details.
 #' @return                        A list with the following components:
 #' \item{Result}{Matrix containing risks over time under the natural course and under each user-specific intervention.}
 #' \item{ResultRatio}{Matrix containing risk ratios over time under the natural course and under each user-specific intervention.}
@@ -115,7 +119,8 @@ bootstrap_helper <- function(r, time_points, obs_data, bootseeds, outcome_type,
                              comprisk, compevent_model,
                              time_name, outcome_name, compevent_name,
                              ranges, yrange, compevent_range, parallel, ncores, max_visits,
-                             hazardratio, intcomp, boot_diag, nsimul, baselags){
+                             hazardratio, intcomp, boot_diag, nsimul, baselags,
+                             below_zero_indicator, min_time, show_progress, pb){
 
   set.seed(bootseeds[r])
 
@@ -129,13 +134,17 @@ bootstrap_helper <- function(r, time_points, obs_data, bootseeds, outcome_type,
   resample_data[, 'newid' := resample_data$bid]
   resample_data[, 'bid' := NULL]
 
+  resample_data_geq_0 <- resample_data[resample_data[[time_name]] >= 0]
+
   # Fit models for covariates, outcome, and competing event (if any)
   fitcov <- pred_fun_cov(covparams = covparams, covnames = covnames, covtypes = covtypes,
                          covfits_custom = covfits_custom, restrictions = restrictions,
-                         time_name = time_name, obs_data = resample_data)
-  fitY <- pred_fun_Y(ymodel, yrestrictions, outcome_type, outcome_name, time_name, resample_data)
+                         time_name = time_name, obs_data = resample_data_geq_0,
+                         model_fits = FALSE)
+  fitY <- pred_fun_Y(ymodel, yrestrictions, outcome_type, outcome_name, time_name, resample_data_geq_0,
+                     model_fits = FALSE)
   if (comprisk){
-    fitD <- pred_fun_D(compevent_model, compevent_restrictions, resample_data)
+    fitD <- pred_fun_D(compevent_model, compevent_restrictions, resample_data_geq_0, model_fits = FALSE)
   } else {
     fitD <- NA
   }
@@ -165,7 +174,7 @@ bootstrap_helper <- function(r, time_points, obs_data, bootseeds, outcome_type,
   comb_int_times <- int_times
 
   # Simulate data under different interventions
-  pools <- lapply(1:length(comb_interventions), FUN = function(i){
+  pools <- lapply(seq_along(comb_interventions), FUN = function(i){
     simulate(fitcov = fitcov, fitY = fitY, fitD = fitD,
              yrestrictions = yrestrictions,
              compevent_restrictions = compevent_restrictions,
@@ -182,7 +191,8 @@ bootstrap_helper <- function(r, time_points, obs_data, bootseeds, outcome_type,
              outcome_type = outcome_type,
              subseed = bootseeds[r], time_points = time_points,
              obs_data = resample_data, parallel = FALSE, max_visits = max_visits,
-             baselags = baselags)
+             baselags = baselags, below_zero_indicator = below_zero_indicator,
+             min_time = min_time, show_progress = show_progress, pb = pb)
   })
 
   nat_pool <- pools[[1]] # Simulated data under natural course
@@ -248,7 +258,7 @@ bootstrap_helper <- function(r, time_points, obs_data, bootseeds, outcome_type,
   if (hazardratio){
     # Generate dataset containing failure/censor time information for each subject
     # under each intervention
-    pools_hr <- lapply(1:length(intcomp), FUN = hr_helper, intcomp = intcomp,
+    pools_hr <- lapply(seq_along(intcomp), FUN = hr_helper, intcomp = intcomp,
                        time_name = time_name, pools = pools)
     data_hr <- rbindlist(pools_hr)
     names(data_hr)[names(data_hr) == time_name] <- "t0"
@@ -287,13 +297,17 @@ bootstrap_helper <- function(r, time_points, obs_data, bootseeds, outcome_type,
     bootstderrs <- get_stderrs(fits = fits, fitD = fitD, time_points = time_points,
                                outcome_name = outcome_name, compevent_name = compevent_name,
                                covnames = covnames)
+    bootvcovs <- get_vcovs(fits = fits, fitD = fitD, time_points = time_points,
+                           outcome_name = outcome_name, compevent_name = compevent_name,
+                           covnames = covnames)
   } else {
     bootcoeffs <- NA
     bootstderrs <- NA
+    bootvcovs <- NA
   }
 
 
   final <- list(Result = int_result, ResultRatio = result_ratio, ResultDiff = result_diff, ResultHR = hr_res,
-                bootcoeffs = bootcoeffs, bootstderrs = bootstderrs)
+                bootcoeffs = bootcoeffs, bootstderrs = bootstderrs, bootvcovs = bootvcovs)
   return (final)
 }

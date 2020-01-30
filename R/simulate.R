@@ -122,11 +122,15 @@ predict_trunc_normal <- function(x, mean, est_sd, a, b){
 #'                                a visit is forced (in the simulated data). Multiple values exist in the
 #'                                vector when the modeling of more than covariate is attached to a visit
 #'                                process.
-#' @param baselags                Logical scalar for specifying the convention used for lagi and lag_cumavgi terms in the model statements when
-#'                                the current time index, \eqn{t}, is such that \eqn{t < i}. If this argument is set to \code{FALSE}, the value
+#' @param baselags                Logical scalar for specifying the convention used for lagi and lag_cumavgi terms in the model statements when pre-baseline times are not
+#'                                included in \code{obs_data} and when the current time index, \eqn{t}, is such that \eqn{t < i}. If this argument is set to \code{FALSE}, the value
 #'                                of all lagi and lag_cumavgi terms in this context are set to 0 (for non-categorical covariates) or the reference
 #'                                level (for categorical covariates). If this argument is set to \code{TRUE}, the value of lagi and lag_cumavgi terms
 #'                                are set to their values at time 0. The default is \code{FALSE}.
+#' @param below_zero_indicator    Logical scalar indicating whether the observed data set contains rows for time \eqn{t < 0}.
+#' @param min_time                Numeric scalar specifying lowest value of time \eqn{t} in the observed data set.
+#' @param show_progress           Logical scalar indicating whether to print a progress bar for the number of bootstrap samples completed in the R console. This argument is only applicable when \code{parallel} is set to \code{FALSE} and bootstrap samples are used (i.e., \code{nsamples} is set to a value greater than 0). The default is \code{TRUE}.
+#' @param pb                      Progress bar R6 object. See \code{\link[progress]{progress_bar}} for further details.
 #' @param ...                     Other arguments, which are passed to the functions in \code{covpredict_custom}.
 #' @return                        A data table containing simulated data under the specified intervention.
 #' @keywords internal
@@ -138,7 +142,8 @@ simulate <- function(o, fitcov, fitY, fitD,
                      comprisk, ranges, yrange, compevent_range,
                      outcome_type, subseed, obs_data, time_points, parallel,
                      covnames, covtypes, covparams, covpredict_custom,
-                     basecovs, max_visits, baselags, ...){
+                     basecovs, max_visits, baselags, below_zero_indicator,
+                     min_time, show_progress, pb, ...){
   set.seed(subseed)
 
   # Mechanism of passing intervention variable and intervention is different for parallel
@@ -154,7 +159,7 @@ simulate <- function(o, fitcov, fitY, fitD,
   }
 
   if (!is.null(fitcov)){
-    rmses <- lapply(1:length(fitcov), FUN = rmse_calculate, fits = fitcov, covnames = covnames,
+    rmses <- lapply(seq_along(fitcov), FUN = rmse_calculate, fits = fitcov, covnames = covnames,
                     covtypes = covtypes, obs_data = obs_data, outcome_name = outcome_name,
                     time_name = time_name, restrictions = restrictions,
                     yrestrictions = yrestrictions, compevent_restrictions = compevent_restrictions)
@@ -173,7 +178,7 @@ simulate <- function(o, fitcov, fitY, fitD,
   if (!(length(intvar) == 1 && intvar == 'none')) {
     intvar_vec <- unique(unlist(intvar))
     histvars_int <- histories_int <- rep(list(NA), length(histvars))
-    for (l in 1:length(histvars)){
+    for (l in seq_along(histvars)){
       histvars_temp <- histvars[[l]][histvars[[l]] %in% intvar_vec]
       if (length(histvars_temp) > 0){
         histvars_int[[l]] <- histvars_temp
@@ -188,25 +193,32 @@ simulate <- function(o, fitcov, fitY, fitD,
     if (t == 0){
       # Set simulated covariate values at time t = 0 equal to observed covariate values
       if (!is.na(basecovs[[1]])){
-        newdf <- obs_data[obs_data[[time_name]] == t, ][, .SD, .SDcols = c(covnames, basecovs)]
+        pool <- obs_data[obs_data[[time_name]] <= t, ][, .SD, .SDcols = c(covnames, basecovs, time_name)]
       } else {
-        newdf <- obs_data[obs_data[[time_name]] == t, ][, .SD, .SDcols = covnames]
+        pool <- obs_data[obs_data[[time_name]] <= t, ][, .SD, .SDcols = c(covnames, time_name)]
       }
-      set(newdf, j = 'id', value = ids_unique)
-      set(newdf, j = time_name, value = rep(t, data_len))
+      set(pool, j = 'id', value = rep(ids_unique, each = 1 - min_time))
       if (!is.na(basecovs[[1]])){
-        setcolorder(newdf, c('id', time_name, covnames, basecovs))
+        setcolorder(pool, c('id', time_name, covnames, basecovs))
       } else {
-        setcolorder(newdf, c('id', time_name, covnames))
+        setcolorder(pool, c('id', time_name, covnames))
       }
+      newdf <- pool[pool[[time_name]] == 0]
       # Update datatable with specified treatment regime / intervention for this
       # simulation
-      intfunc(newdf, pool = newdf, intervention, intvar, unlist(int_time), time_name, t)
+      intfunc(newdf, pool = pool, intervention, intvar, unlist(int_time), time_name, t)
+      if (ncol(newdf) > ncol(pool)){
+        pool <- rbind(pool[pool[[time_name]] < t], newdf, fill = TRUE)
+        pool <- pool[order(id, get(time_name))]
+      } else {
+        pool[pool[[time_name]] == t] <- newdf
+      }
       # Update datatable with new covariates that are functions of history of existing
       # covariates
-      make_histories(pool = newdf, histvars = histvars, histvals = histvals,
+      make_histories(pool = pool, histvars = histvars, histvals = histvals,
                      histories = histories, time_name = time_name, t = t, id = 'id',
-                     max_visits = max_visits, baselags = baselags)
+                     max_visits = max_visits, baselags = baselags, below_zero_indicator = below_zero_indicator)
+      newdf <- pool[pool[[time_name]] == t]
       # Generate outcome probabilities
       if (outcome_type == 'survival'){
         set(newdf, j = 'Py', value = stats::predict(fitY, type = 'response', newdata = newdf))
@@ -283,7 +295,8 @@ simulate <- function(o, fitcov, fitY, fitD,
       # If competing event occurs, outcome cannot also occur because
       # both presumably lead to death
       # Calculate probability of survival or death by competing event at time t
-      pool <- newdf # Create datatable containing all simulated values up until time t
+      pool <- rbind(pool[pool[[time_name]] < t], newdf, fill = TRUE)
+      pool <- pool[order(id, get(time_name))]
       col_types <- sapply(pool, class)
     } else {
       # Set initial simulated values at time t to simulated values at time t - 1, to be
@@ -298,9 +311,9 @@ simulate <- function(o, fitcov, fitY, fitD,
       pool <- rbind(newdf, pool)
       make_histories(pool = pool, histvars = histvars, histvals = histvals, histories = histories,
                      time_name = time_name, t = t, id = 'id', max_visits = max_visits,
-                     baselags = baselags)
+                     baselags = baselags, below_zero_indicator = below_zero_indicator)
       newdf <- pool[pool[[time_name]] == t]
-      for (i in 1:length(covnames)){
+      for (i in seq_along(covnames)){
         cast <- get(paste0('as.',unname(col_types[covnames[i]])))
         if (covtypes[i] == 'binary'){
           set(newdf, j = covnames[i],
@@ -330,10 +343,10 @@ simulate <- function(o, fitcov, fitY, fitD,
           set(newdf, j = paste("I_", covnames[i], sep = ""), value = NULL)
         } else if (covtypes[i] == 'bounded normal'){
           if (!is.na(restrictions[[1]][[1]])){
-            restrictnames <- lapply(1:length(restrictions), FUN = function(r){
+            restrictnames <- lapply(seq_along(restrictions), FUN = function(r){
               restrictions[[r]][[1]]})
             # Create list of conditions where covariates are modeled
-            conditions <- lapply(1:length(restrictions), FUN = function(r){
+            conditions <- lapply(seq_along(restrictions), FUN = function(r){
               restrictions[[r]][[2]]
             })
             if (covnames[i] %in% restrictnames){
@@ -367,15 +380,15 @@ simulate <- function(o, fitcov, fitY, fitD,
                 }
               }
               if (condition[1] != ""){
-                sub_obs_data <- subset(obs_data, eval(parse(text = condition)))
+                sub_obs_data <- subset(obs_data[obs_data[[time_name]] >= 0], eval(parse(text = condition)))
               } else {
-                sub_obs_data <- obs_data
+                sub_obs_data <- obs_data[obs_data[[time_name]] >= 0]
               }
             } else {
-              sub_obs_data <- obs_data
+              sub_obs_data <- obs_data[obs_data[[time_name]] >= 0]
             }
           } else {
-            sub_obs_data <- obs_data
+            sub_obs_data <- obs_data[obs_data[[time_name]] >= 0]
           }
           set(newdf, j = paste("norm_", covnames[i], sep = ""),
               value = predict_normal(data_len, stats::predict(fitcov[[i]], type = 'response',
@@ -399,10 +412,10 @@ simulate <- function(o, fitcov, fitY, fitD,
           }
         } else if (covtypes[i] == 'custom'){
           if (!is.na(restrictions[[1]][[1]])){
-            restrictnames <- lapply(1:length(restrictions), FUN = function(r){
+            restrictnames <- lapply(seq_along(restrictions), FUN = function(r){
               restrictions[[r]][[1]]})
             # Create list of conditions where covariates are modeled
-            conditions <- lapply(1:length(restrictions), FUN = function(r){
+            conditions <- lapply(seq_along(restrictions), FUN = function(r){
               restrictions[[r]][[2]]
             })
             if (covnames[i] %in% restrictnames){
@@ -442,31 +455,29 @@ simulate <- function(o, fitcov, fitY, fitD,
                                              condition, covnames[i], ...)))
         }
         if (covtypes[i] == 'normal' || covtypes[i] == 'bounded normal' ||
-            covtypes[i] == 'truncated normal'){
+           covtypes[i] == 'truncated normal'){
 
-          if (length(newdf[newdf[[covnames[i]]] < ranges[[i]][1]][[covnames[i]]]) != 0){
-            newdf[newdf[[covnames[i]]] < ranges[[i]][1], (covnames[i]) :=
-                    cast(ranges[[i]][1])]
-          }
-          if (length(newdf[newdf[[covnames[i]]] > ranges[[i]][2]][[covnames[i]]]) != 0){
-            newdf[newdf[[covnames[i]]] < ranges[[i]][1], (covnames[i]) :=
-                    cast(ranges[[i]][1])]
-          }
+             if (length(newdf[newdf[[covnames[i]]] < ranges[[i]][1]][[covnames[i]]]) != 0){
+                newdf[newdf[[covnames[i]]] < ranges[[i]][1], (covnames[i]) := cast(ranges[[i]][1])]
+             }
+             if (length(newdf[newdf[[covnames[i]]] > ranges[[i]][2]][[covnames[i]]]) != 0){
+                newdf[newdf[[covnames[i]]] > ranges[[i]][2], (covnames[i]) := cast(ranges[[i]][2])]
+             }
         } else if (covtypes[i] == 'zero-inflated normal') {
-          if (length(newdf[newdf[[covnames[i]]] != 0][newdf[newdf[[covnames[i]]] != 0][[covnames[i]]] < ranges[[i]][1]][[covnames[i]]]) != 0){
-            newdf[newdf[[covnames[i]]] != 0][newdf[newdf[[covnames[i]]] != 0][[covnames[i]]] < ranges[[i]][1], (covnames[i]) := cast(ranges[[i]][1])]
-          }
-          if (length(newdf[newdf[[covnames[i]]] != 0][newdf[newdf[[covnames[i]]] != 0][[covnames[i]]] > ranges[[i]][2]][[covnames[i]]]) != 0){
-            newdf[newdf[[covnames[i]]] != 0][newdf[newdf[[covnames[i]]] != 0][[covnames[i]]] > ranges[[i]][2], (covnames[i]) := cast(ranges[[i]][2])]
-          }
+             if (length(newdf[newdf[[covnames[i]]] < ranges[[i]][1] & newdf[[covnames[i]]] > 0][[covnames[i]]]) != 0){
+                newdf[newdf[[covnames[i]]] < ranges[[i]][1] & newdf[[covnames[i]]] > 0, (covnames[i]) := cast(ranges[[i]][1])]
+             }
+             if (length(newdf[newdf[[covnames[i]]] > ranges[[i]][2]][[covnames[i]]]) != 0){
+                newdf[newdf[[covnames[i]]] > ranges[[i]][2], (covnames[i]) := cast(ranges[[i]][2])]
+             }
         }
         # Check if there are restrictions on covariate simulation
         if (!is.na(restrictions[[1]][[1]])){
-          lapply(1:length(restrictions), FUN = function(r){
+          lapply(seq_along(restrictions), FUN = function(r){
             if (restrictions[[r]][[1]] == covnames[i]){
               restrict_ids <- newdf[!eval(parse(text = restrictions[[r]][[2]]))]$id
               if (length(restrict_ids) != 0){
-                restrictions[[r]][[3]](newdf, pool[pool[[time_name]] < t], restrictions[[r]], time_name, t)
+                restrictions[[r]][[3]](newdf, pool[pool[[time_name]] < t & pool[[time_name]] >= 0], restrictions[[r]], time_name, t)
               }
             }
           })
@@ -479,7 +490,7 @@ simulate <- function(o, fitcov, fitY, fitD,
           make_histories(pool = pool, histvars = rep(list(covnames[i]), sum(ind)),
                          histvals = histvals, histories = histories[ind],
                          time_name = time_name, t = t, id = 'id', max_visits = max_visits,
-                         baselags = baselags)
+                         baselags = baselags, below_zero_indicator = below_zero_indicator)
           newdf <- pool[pool[[time_name]] == t]
         }
       }
@@ -491,10 +502,10 @@ simulate <- function(o, fitcov, fitY, fitD,
       # covariates
       pool[pool[[time_name]] == t] <- newdf
 
-      if (!(length(intvar) == 1 && intvar == 'none')){
+      if (!(length(intvar) == 1 && intvar == 'none') && length(histvars_int) > 0){
         make_histories(pool = pool, histvars = histvars_int, histvals = histvals,
                        histories = histories_int, time_name = time_name, t = t, id = 'id',
-                       max_visits = max_visits, baselags = baselags)
+                       max_visits = max_visits, baselags = baselags, below_zero_indicator = below_zero_indicator)
       }
 
       newdf <- pool[pool[[time_name]] == t]
@@ -574,13 +585,14 @@ simulate <- function(o, fitcov, fitY, fitD,
       # Calculate probability of death from main event at time t
       if (comprisk){
         set(newdf, j = 'prodp1',
-            value = newdf$Py * tapply(pool[pool[[time_name]] < t]$prodp0,
-                                      pool[pool[[time_name]] < t]$id, FUN = prod) *
-              tapply(1 - pool[pool[[time_name]] < t]$Pd, pool[pool[[time_name]] < t]$id,
+            value = newdf$Py * tapply(pool[pool[[time_name]] < t & pool[[time_name]] >= 0]$prodp0,
+                                      pool[pool[[time_name]] < t & pool[[time_name]] >= 0]$id, FUN = prod) *
+              tapply(1 - pool[pool[[time_name]] < t & pool[[time_name]] >= 0]$Pd,
+                     pool[pool[[time_name]] < t & pool[[time_name]] >= 0]$id,
                      FUN = prod) * (1 - newdf$Pd))
       } else if (outcome_type == 'survival'){
-        set(newdf, j = 'prodp1', value = newdf$Py * tapply(pool[pool[[time_name]] < t]$prodp0,
-                                                           pool[pool[[time_name]] < t]$id,
+        set(newdf, j = 'prodp1', value = newdf$Py * tapply(pool[pool[[time_name]] < t & pool[[time_name]] >= 0]$prodp0,
+                                                           pool[pool[[time_name]] < t & pool[[time_name]] >= 0]$id,
                                                            FUN = prod))
       }
       # Add simulated data for time t to aggregate simulated data over time
@@ -592,10 +604,14 @@ simulate <- function(o, fitcov, fitY, fitD,
   colnames(pool)[colnames(pool) == 't0'] <- time_name
   # Calculate probabiity of death from main event at or before time t for each individual
   # at each time point
+  pool <- pool[pool[[time_name]] >= 0]
   if (outcome_type == 'survival'){
     pool[, 'poprisk' := stats::ave(pool$prodp1, by = pool$id, FUN = cumsum)]
     pool[, 'survival' := stats::ave(pool$prodp0, by = pool$id, FUN = cumprod)]
   }
   pool2 <- copy(pool)
+  if (show_progress){
+    pb$tick()
+  }
   return (pool2)
 }

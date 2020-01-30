@@ -84,7 +84,7 @@ error_catch <- function(id, nsimul, intvars, interventions, int_times, int_descr
                         hazardratio, intcomp, time_points, outcome_type,
                         time_name, obs_data, parallel, ncores, nsamples,
                         sim_data_b, outcome_name, compevent_name, comprisk,
-                        covmodels, histvals){
+                        covmodels, histvals, min_time){
 
   if (!is.data.table(obs_data)){
     if (is.data.frame(obs_data)){
@@ -101,11 +101,6 @@ error_catch <- function(id, nsimul, intvars, interventions, int_times, int_descr
     stop("Missing parameter id")
   } else if (!(id %in% obs_colnames)){
     stop(paste('id', id, 'not found in obs_data'))
-  }
-  if (missing(time_name)){
-    stop("Missing parameter time_name")
-  } else if (!(time_name %in% obs_colnames)){
-    stop(paste('time_name', time_name, 'not found in obs_data'))
   }
   if (missing(outcome_name)){
     stop("Missing parameter outcome_name")
@@ -146,17 +141,27 @@ error_catch <- function(id, nsimul, intvars, interventions, int_times, int_descr
             subjects", immediate. = TRUE)
   }
 
-  correct_time_indicator <- tapply(obs_data[[time_name]], obs_data[[id]],
-                                   FUN = function(x){
-                                     all(x == 0:(length(x)-1))
-                                     })
-  if (!all(correct_time_indicator)){
-    stop("Time variable in obs_data not correctly specified. For each individual time records should begin with 0 and increase in increments of 1, where no time records are skipped.")
+  if (missing(time_name)){
+    stop("Missing parameter time_name")
+  } else if (!(time_name %in% colnames(obs_data))){
+    stop(paste('time_name', time_name, 'not found in obs_data'))
+  }
+  if(!is.numeric(obs_data[[time_name]])){
+    stop("Time variable in obs_data is not a numeric variable")
   }
 
-  obs_time_points <- diff(range(obs_data[[time_name]]))+1
+  min_time <- min(obs_data[[time_name]])
+  correct_time_indicator <- tapply(obs_data[[time_name]], obs_data[[id]],
+                                   FUN = function(x){
+                                     all(x == min(min_time, 0):(length(x)+min(min_time, 0)-1))
+                                     })
+  if (!all(correct_time_indicator)){
+    stop("Time variable in obs_data not correctly specified. For each individual time records should begin with 0 (or, optionally -i if using i lags) and increase in increments of 1, where no time records are skipped.")
+  }
+
+  obs_time_points_pos <- max(obs_data[[time_name]])+1
   if (!is.null(time_points)){
-    if (time_points > obs_time_points){
+    if (time_points > obs_time_points_pos){
       stop("Number of simulated time points desired is set to a value beyond the observed
             follow-up in the data")
     }
@@ -166,7 +171,7 @@ error_catch <- function(id, nsimul, intvars, interventions, int_times, int_descr
     stop("Missing covariate information (covnames and covtypes are of unequal length)")
   }
 
-  for (k in 1:length(covnames)){
+  for (k in seq_along(covnames)){
     if (covtypes[k] == 'zero-inflated normal'){
       if (sum(obs_data[[covnames[k]]] < 0) != 0){
         stop("zero-inflated normal covariates cannot contain negative values")
@@ -212,11 +217,11 @@ error_catch <- function(id, nsimul, intvars, interventions, int_times, int_descr
 
   # Check that, for static interventions, a vector of length time_points is given for the treatment values
   if (is.null(time_points)){
-    time_points <- diff(range(obs_data[[time_name]]))+1
+    time_points <- obs_time_points_pos
   }
   if (!is.null(interventions)){
-    for (i in 1:length(interventions)){
-      for (j in 1:length(interventions[[i]])){
+    for (i in seq_along(interventions)){
+      for (j in seq_along(interventions[[i]])){
         if (identical(interventions[[i]][[j]][[1]], static) &&
             length(interventions[[i]][[j]]) - 1 != time_points){
           stop("For static interventions, a vector of length time_points must be given to specify the treatment values")
@@ -254,7 +259,7 @@ error_catch <- function(id, nsimul, intvars, interventions, int_times, int_descr
     }
   }
   if (!is.na(histories[1])){
-    for (i in 1:length(histories)){
+    for (i in seq_along(histories)){
       if (isTRUE(all.equal(histories[[i]], lagavg)) |
           isTRUE(all.equal(histories[[i]], cumavg))){
         for (histvar in histvars[[i]]){
@@ -292,7 +297,7 @@ error_catch <- function(id, nsimul, intvars, interventions, int_times, int_descr
   if (length(covmodels) != length(covnames)){
     stop("covmodels and covnames are unequal lengths")
   }
-  for (i in 1:length(covnames)){
+  for (i in seq_along(covnames)){
     rel_model <- paste(deparse(covmodels[[i]]), collapse = "")
     model_var <- stringr::str_extract(rel_model, '[^~]+')
     model_var <- stringr::str_trim(model_var, 'left')
@@ -357,12 +362,16 @@ add_stderr <- function(fit){
   }
 }
 
+add_vcov <- function(fit){
+  return(stats::vcov(fit))
+}
+
 get_header <- function(int_descript, sample_size, nsimul, nsamples, ref_int){
   header <- paste0("PREDICTED RISK UNDER MULTIPLE INTERVENTIONS\n\n",
                    "Intervention \t Description\n",
                    "0 \t\t Natural course\n")
   if (!is.null(int_descript)){
-    for (i in 1:length(int_descript)){
+    for (i in seq_along(int_descript)){
       header <- paste0(header, i, "\t\t ", int_descript[i], "\n")
     }
   }
@@ -481,4 +490,31 @@ get_stderrs <- function(fits, fitD, time_points, outcome_name, compevent_name,
     }
   }
   return(stderrs)
+}
+
+get_vcovs <- function(fits, fitD, time_points, outcome_name, compevent_name,
+                      covnames){
+  vcovs <- lapply(fits, FUN = function(fit){
+    if (length(fit) == 2){
+      return (list(fit[[1]]$vcov, fit[[2]]$vcov))
+    } else {
+      return (fit$vcov)
+    }
+  })
+
+  if (!is.na(fitD)[[1]]){
+    if (time_points == 1){
+      vcovs <- stats::setNames(vcovs, c(outcome_name, compevent_name))
+    } else {
+      vcovs <- stats::setNames(vcovs, c(covnames, outcome_name, compevent_name))
+    }
+  }
+  else {
+    if (time_points == 1){
+      vcovs <- stats::setNames(vcovs, outcome_name)
+    } else {
+      vcovs <- stats::setNames(vcovs, c(covnames, outcome_name))
+    }
+  }
+  return(vcovs)
 }

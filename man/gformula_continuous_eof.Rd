@@ -12,7 +12,7 @@ gformula_continuous_eof(obs_data, id, time_name, covnames, covtypes,
   restrictions = NA, yrestrictions = NA, baselags = FALSE,
   nsimul = NA, sim_data_b = FALSE, seed, nsamples = 0,
   parallel = FALSE, ncores = NA, ci_method = "percentile", threads,
-  boot_diag = FALSE, ...)
+  model_fits = FALSE, boot_diag = FALSE, show_progress = TRUE, ...)
 }
 \arguments{
 \item{obs_data}{Data table containing the observed data.}
@@ -99,8 +99,8 @@ according to the fitted model; when the condition is \code{FALSE},
 the outcome variable takes on the value in the second entry.
 The default is \code{NA}.}
 
-\item{baselags}{Logical scalar for specifying the convention used for lagi and lag_cumavgi terms in the model statements when
-the current time index, \eqn{t}, is such that \eqn{t < i}. If this argument is set to \code{FALSE}, the value
+\item{baselags}{Logical scalar for specifying the convention used for lagi and lag_cumavgi terms in the model statements when pre-baseline times are not
+included in \code{obs_data} and when the current time index, \eqn{t}, is such that \eqn{t < i}. If this argument is set to \code{FALSE}, the value
 of all lagi and lag_cumavgi terms in this context are set to 0 (for non-categorical covariates) or the reference
 level (for categorical covariates). If this argument is set to \code{TRUE}, the value of lagi and lag_cumavgi terms
 are set to their values at time 0. The default is \code{FALSE}.}
@@ -126,7 +126,11 @@ In many applications, users may wish to set this argument equal to \code{paralle
 
 \item{threads}{Integer specifying the number of threads to be used in \code{data.table}. See \code{\link[data.table]{setDTthreads}} for further details.}
 
-\item{boot_diag}{Logical scalar indicating whether to return the coefficients of the fitted models and their standard errors in the bootstrap samples. The default is \code{FALSE}.}
+\item{model_fits}{Logical scalar indicating whether to return the fitted models. Note that if this argument is set to \code{TRUE}, the output of this function may use a lot of memory. The default is \code{FALSE}.}
+
+\item{boot_diag}{Logical scalar indicating whether to return the coefficients, standard errors, and variance-covariance matrices of the parameters of the fitted models in the bootstrap samples. The default is \code{FALSE}.}
+
+\item{show_progress}{Logical scalar indicating whether to print a progress bar for the number of bootstrap samples completed in the R console. This argument is only applicable when \code{parallel} is set to \code{FALSE} and bootstrap samples are used (i.e., \code{nsamples} is set to a value greater than 0). The default is \code{TRUE}.}
 
 \item{...}{Other arguments, which are passed to the functions in \code{covpredict_custom}.}
 }
@@ -135,16 +139,19 @@ An object of class \code{gformula_continuous_eof}. The object is a list with the
 \item{result}{Results table containing the estimated mean outcome for all interventions (inculding natural course) at the last time point. If bootstrapping was used, the results table includes the bootstrap end-of-follow-up mean ratio, standard error, and 95\% confidence interval.}
 \item{coeffs}{A list of the coefficients of the fitted models.}
 \item{stderrs}{A list of the standard errors of the coefficients of the fitted models.}
+\item{vcovs}{A list of the variance-covariance matrices of the parameters of the fitted models.}
 \item{rmses}{A list of root mean square error (RMSE) values of the fitted models.}
+\item{fits}{A list of the fitted models for the time-varying covariates and outcome. If \code{model_fits} is set to \code{FALSE}, a value of \code{NULL} is given.}
 \item{sim_data}{A list of data tables of the simulated data. Each element in the list corresponds to one of the interventions. If the argument \code{sim_data_b} is set to \code{FALSE}, a value of \code{NA} is given.}
-\item{bootcoeefs}{A list, where the kth element is a list containing the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NA} is given.}
-\item{bootstderrs}{A list, where the kth element is a list containing the standard errors of the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NA} is given.}
+\item{bootcoeefs}{A list, where the kth element is a list containing the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
+\item{bootstderrs}{A list, where the kth element is a list containing the standard errors of the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
+\item{bootvcovs}{A list, where the kth element is a list containing the variance-covariance matrices of the parameters of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
 \item{...}{Some additional elements.}
 
 The results for the g-formula simulation under various interventions for the last time point are printed with the \code{\link{print.gformula_continuous_eof}} function. To generate graphs comparing the mean estimated and observed covariate values over time, use the \code{\link{print.gformula_continuous_eof}} function.
 }
 \description{
-Based on an observed data set, this function estimates the outcome mean at end-of-follow-up under
+Based on an observed data set, this internal function estimates the outcome mean at end-of-follow-up under
 multiple user-specified interventions using the parametric g-formula. See Lin et al. (2019) for
 further details concerning the application and implementation of the parametric g-formula.
 }
@@ -193,4 +200,7 @@ gform_cont_eof
 Lin V, McGrath S, Zhang Z, Petito LC, Logan RW, Hernán MA, and JG Young. gfoRmula: An R package for estimating effects of general time-varying treatment interventions via the parametric g-formula. arXiv e-prints. 2019. \url{https://arxiv.org/abs/1908.07072}.
 
 Robins JM. A new approach to causal inference in mortality studies with a sustained exposure period: application to the healthy worker survivor effect. Mathematical Modelling. 1986;7:1393–1512. [Errata (1987) in Computers and Mathematics with Applications 14, 917.-921. Addendum (1987) in Computers and Mathematics with Applications 14, 923-.945. Errata (1987) to addendum in Computers and Mathematics with Applications 18, 477.].
+}
+\seealso{
+\code{\link{gformula}}
 }
