@@ -1,6 +1,6 @@
-41cbd309139701be8c199ed6dfc0ee28 *DESCRIPTION
+f1815b17600df0642baf7004bddac7d7 *DESCRIPTION
 356fb990d3c92c1d06a460b60923448d *NAMESPACE
-a13a1493ac9c56c5a738acd87638af09 *NEWS.md
+b0f303b8280d38afa0201dd16446459d *NEWS.md
 8fe9fbf750de0c3098ab45d5ec11177a *R/bootstrap.R
 dde7423a4c30c73f5a588f267c955c84 *R/comparisons.R
 6edf7e877a36f2833e86f23a88109c6b *R/data.R
@@ -11,7 +11,7 @@ ae60bf602968b9ee26254475944a1bf5 *R/gformula.R
 5f0c3a65fbbcecadc66986ed7cfc4bc7 *R/interventions.R
 9ecb787b46c917ecc881324fe5c933d3 *R/pred.R
 354019a4c0af08123fa84c63b6fa2c69 *R/restrictions.R
-13e32d1007b9f5f2436cdbce50eff47a *R/s3methods.R
+f76ca7fbb0b61261c5fbdea614171704 *R/s3methods.R
 3580bef5a27bfa2cac2b0a6b98f53607 *R/simulate.R
 270a9f18fe360cbc145977368c2c56f4 *README.md
 c3401a2ad94524bb615a6da7b1933c34 *data/basicdata.rda
@@ -24,7 +24,7 @@ db7f0b05e8a344b9d683167309edba27 *man/basicdata_nocomp.Rd
 f56b86b319d61f40d5061c6c243325be *man/binary_eofdata.Rd
 78e911a5f79de6add7f6abd23f7af5a6 *man/bootstrap_helper.Rd
 4178c35a95079ecd8e1b8cbfbf25fb7c *man/carry_forward.Rd
-8b4a09ba1c6fa921587862e25dc85014 *man/coef.gformula.Rd
+54a89d007a9b3bcac548c319823ac39f *man/coef.gformula.Rd
 81be4fbbdbb47e2fc5e7f23fbbad83e7 *man/continuous_eofdata.Rd
 d0183060f8522b4f497579f2ed94e91a *man/continuous_eofdata_pb.Rd
 2117638afa4aa9d69c746fe89dee6d5d *man/error_catch.Rd
