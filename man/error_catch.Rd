@@ -30,9 +30,12 @@ error_catch(
   outcome_name,
   compevent_name,
   comprisk,
+  censor,
+  censor_name,
   covmodels,
   histvals,
-  min_time
+  ipw_cutoff_quantile,
+  ipw_cutoff_value
 )
 }
 \arguments{
@@ -96,11 +99,19 @@ simulation.}
 
 \item{comprisk}{Logical scalar indicating the presence of a competing event.}
 
+\item{censor}{Logical scalar indicating the presence of a censoring variable in \code{obs_data}.}
+
+\item{censor_name}{Character string specifying the name of the censoring variable in \code{obs_data}.}
+
 \item{covmodels}{Vector of model statements for the time-varying covariates.}
 
 \item{histvals}{List of length 3. First element contains a vector of integers specifying the number of lags back for the lagged function. Second element contains
 a vector of integers indicating the number of lags back for the lagavg function. The last element is an indicator whether a cumavg term
 appears in any of the model statements.}
+
+\item{ipw_cutoff_quantile}{Percentile by which to truncate inverse probability weights.}
+
+\item{ipw_cutoff_value}{Cutoff value by which to truncate inverse probability weights.}
 }
 \value{
 No value is returned.

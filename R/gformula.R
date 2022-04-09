@@ -3,12 +3,22 @@
 #' Based on an observed data set, this function estimates the risk over time (for survival outcomes),
 #' outcome mean at end-of-follow-up (for continuous end-of-follow-up outcomes), or outcome probability at
 #' end-of-follow-up (for binary end-of-follow-up outcomes) under multiple user-specified interventions using
-#' the parametric g-formula. See Lin et al. (2019) for further details concerning the application and
+#' the parametric g-formula. See McGrath et al. (2020) for further details concerning the application and
 #' implementation of the parametric g-formula.
+#'
+#' To assess model misspecification in the parametric g-formula, users can obtain inverse probability (IP) weighted estimates of the natural course risk and/or means of the time-varying covariates from the observed data.
+#' See Chiu et al. (2022) for details.
+#' In addition to the general requirements described in McGrath et al. (2020), the requirements for the input data set and the call to the gformula function for such analyses are described below.
+#'
+#' Users need to include a column in \code{obs_data} with a time-varying censoring variable.
+#' Users need to indicate the name of the censoring variable and a model statement for the censoring variable with parameters \code{censor_name} and \code{censor_model}, respectively.
+#' When competing events are present, users need to include a column in \code{obs_data} with a time-varying indicator of the competing event variable and need to indicate the name of the competing event variable and the corresponding model statement with parameters \code{compevent_name} and \code{compevent_model}, respectively.
+#' Users need to indicate whether to treat competing events as censoring events with the \code{compevent_cens} parameter.
+#' Finally, users can specify how to truncate IP weights with the \code{ipw_cutoff_quantile} or \code{ipw_cutoff_value} parameters.
 #'
 #' @param id                      Character string specifying the name of the ID variable in \code{obs_data}.
 #' @param time_points             Number of time points to simulate. By default, this argument is set equal to the maximum
-#'                                number of records that \code{obs_data} contains for any individual.
+#'                                number of records that \code{obs_data} contains for any individual plus 1.
 #' @param obs_data                Data table containing the observed data.
 #' @param seed                    Starting seed for simulations and bootstrapping.
 #' @param nsimul                  Number of subjects for whom to simulate data. By default, this argument is set
@@ -16,6 +26,8 @@
 #' @param time_name               Character string specifying the name of the time variable in \code{obs_data}.
 #' @param outcome_name            Character string specifying the name of the outcome variable in \code{obs_data}.
 #' @param compevent_name          Character string specifying the name of the competing event variable in \code{obs_data}. Only applicable for survival outcomes.
+#' @param censor_name             Character string specifying the name of the censoring variable in \code{obs_data}. Only applicable when using inverse probability weights to estimate the natural course means / risk from the observed data. See "Details".
+#' @param censor_model            Model statement for the censoring variable. Only applicable when using inverse probability weights to estimate the natural course means / risk from the observed data. See "Details".
 #' @param outcome_type            Character string specifying the "type" of outcome. The possible "types" are: \code{"survival"}, \code{"continuous_eof"}, and \code{"binary_eof"}.
 #' @param intvars                 List, whose elements are vectors of character strings. The kth vector in \code{intvars} specifies the name(s) of the variable(s) to be intervened
 #'                                on in each round of the simulation under the kth intervention in \code{interventions}.
@@ -83,6 +95,11 @@
 #'                                of consecutive visits that can be missed before an
 #'                                individual is censored. The default is \code{NA}.
 #' @param compevent_model         Model statement for the competing event variable. The default is \code{NA}. Only applicable for survival outcomes.
+#' @param compevent_cens          Logical scalar indicating whether to treat competing events as censoring events.
+#'                                This argument is only applicable for survival outcomes and when a competing even model is supplied (i.e., \code{compevent_name} and \code{compevent_model} are specified).
+#'                                If this argument is set to \code{TRUE}, the competing event model will only be used to construct inverse probability weights to estimate the natural course means / risk from the observed data.
+#'                                If this argument is set to \code{FALSE}, the competing event model will be used in the parametric g-formula estimates of the risk and will not be used to construct inverse probability weights.
+#'                                See "Details". The default is \code{FALSE}.
 #' @param intcomp                 List of two numbers indicating a pair of interventions to be compared by a hazard ratio.
 #'                                The default is \code{NA}, resulting in no hazard ratio calculation.
 #' @param baselags                Logical scalar for specifying the convention used for lagi and lag_cumavgi terms in the model statements when pre-baseline times are not
@@ -103,6 +120,8 @@
 #' @param model_fits              Logical scalar indicating whether to return the fitted models. Note that if this argument is set to \code{TRUE}, the output of this function may use a lot of memory. The default is \code{FALSE}.
 #' @param boot_diag               Logical scalar indicating whether to return the coefficients, standard errors, and variance-covariance matrices of the parameters of the fitted models in the bootstrap samples. The default is \code{FALSE}.
 #' @param show_progress           Logical scalar indicating whether to print a progress bar for the number of bootstrap samples completed in the R console. This argument is only applicable when \code{parallel} is set to \code{FALSE} and bootstrap samples are used (i.e., \code{nsamples} is set to a value greater than 0). The default is \code{TRUE}.
+#' @param ipw_cutoff_quantile     Percentile by which to truncate inverse probability weights. The default is \code{NULL} (i.e., no truncation). See "Details".
+#' @param ipw_cutoff_value        Cutoff value by which to truncate inverse probability weights. The default is \code{NULL} (i.e., no truncation). See "Details".
 #' @param ...                     Other arguments, which are passed to the functions in \code{covpredict_custom}.
 #' @return                        An object of class \code{gformula_survival}. The object is a list with the following components:
 #' \item{result}{Results table. For survival outcomes, this contains the estimated risk, risk difference, and risk ratio for all interventions (inculding the natural course) at each time point. For continuous end-of-follow-up outcomes, this contains estimated mean outcome, mean difference, and mean ratio for all interventions (inculding natural course) at the last time point. For binary end-of-follow-up outcomes, this contains the estimated outcome probability, probability difference, and probability ratio for all interventions (inculding natural course) at the last time point. If bootstrapping was used, the results table includes the bootstrap risk / mean / probability difference, ratio, standard error, and 95\% confidence interval.}
@@ -113,6 +132,7 @@
 #' \item{hazardratio_val}{Hazard ratio between two interventions (if applicable).}
 #' \item{fits}{A list of the fitted models for the time-varying covariates, outcome, and competing event (if applicable). If \code{model_fits} is set to \code{FALSE}, a value of \code{NULL} is given.}
 #' \item{sim_data}{A list of data tables of the simulated data. Each element in the list corresponds to one of the interventions. If the argument \code{sim_data_b} is set to \code{FALSE}, a value of \code{NA} is given.}
+#' \item{IP_weights}{A numeric vector specifying the inverse probability weights. See "Details".}
 #' \item{bootcoeefs}{A list, where the kth element is a list containing the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
 #' \item{bootstderrs}{A list, where the kth element is a list containing the standard errors of the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
 #' \item{bootvcovs}{A list, where the kth element is a list containing the variance-covariance matrices of the parameters of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
@@ -120,6 +140,7 @@
 #'
 #' The results for the g-formula simulation are printed with the \code{\link{print.gformula_survival}}, \code{\link{print.gformula_continuous_eof}}, and \code{\link{print.gformula_binary_eof}} functions. To generate graphs comparing the mean estimated covariate values and risks over time and mean observed covariate values and risks over time, use the \code{\link{plot.gformula_survival}}, \code{\link{plot.gformula_continuous_eof}}, and \code{\link{plot.gformula_binary_eof}} functions.
 #'
+#' @references Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Assessing model misspecification of the parametric g-formula in the presence of censoring. In preparation.
 #' @references McGrath S, Lin V, Zhang Z, Petito LC, Logan RW, Hernán MA, and JG Young. gfoRmula: An R package for estimating the effects of sustained treatment strategies via the parametric g-formula. Patterns. 2020;1:100008.
 #' @references Robins JM. A new approach to causal inference in mortality studies with a sustained exposure period: application to the healthy worker survivor effect. Mathematical Modelling. 1986;7:1393–1512. [Errata (1987) in Computers and Mathematics with Applications 14, 917.-921. Addendum (1987) in Computers and Mathematics with Applications 14, 923-.945. Errata (1987) to addendum in Computers and Mathematics with Applications 18, 477.].
 #' @examples
@@ -284,6 +305,30 @@
 #' gform_bin_eof
 #' }
 #'
+#' ## Using IP weighting to estimate natural course risk
+#' ## Only the natural course intervention is included for simplicity
+#' \donttest{
+#' covnames <- c('L', 'A')
+#' histories <- c(lagged)
+#' histvars <- list(c('A', 'L'))
+#' ymodel <- Y ~ L + A
+#' covtypes <- c('binary', 'normal')
+#' covparams <- list(covmodels = c(L ~ lag1_L + lag1_A,
+#'                                 A ~ lag1_L + L + lag1_A))
+#' censor_name <- 'C'
+#' censor_model <- C ~ L
+#' res_censor <- gformula(obs_data = censor_data, id = 'id',
+#'                        time_name = 't0', covnames = covnames,
+#'                        outcome_name = 'Y', outcome_type = 'survival',
+#'                        censor_name = censor_name, censor_model = censor_model,
+#'                        covtypes = covtypes,
+#'                        covparams = covparams, ymodel = ymodel,
+#'                        intvars = NULL, interventions = NULL, int_descript = NULL,
+#'                        histories = histories, histvars = histvars,
+#'                        seed = 1234)
+#' plot(res_censor)
+#' }
+#'
 #' @import data.table
 #' @export
 
@@ -293,6 +338,8 @@ gformula <- function(obs_data, id, time_points = NULL,
                      histvars = NULL, histories = NA, basecovs = NA,
                      outcome_name, outcome_type, ymodel,
                      compevent_name = NULL, compevent_model = NA,
+                     compevent_cens = FALSE,
+                     censor_name = NULL, censor_model = NA,
                      intvars = NULL, interventions = NULL,
                      int_times = NULL, int_descript = NULL, ref_int = 0, intcomp = NA,
                      visitprocess = NA, restrictions = NA,
@@ -301,7 +348,8 @@ gformula <- function(obs_data, id, time_points = NULL,
                      nsimul = NA, sim_data_b = FALSE, seed,
                      nsamples = 0, parallel = FALSE, ncores = NA,
                      ci_method = 'percentile', threads, model_fits = FALSE,
-                     boot_diag = FALSE, show_progress = TRUE, ...){
+                     boot_diag = FALSE, show_progress = TRUE, ipw_cutoff_quantile = NULL,
+                     ipw_cutoff_value = NULL, ...){
   if (! outcome_type %in% c('survival', 'continuous_eof', 'binary_eof')){
     stop("outcome_type must be 'survival', 'continuous_eof', or 'binary_eof', but outcome_type was set to", outcome_type)
   }
@@ -316,6 +364,9 @@ gformula <- function(obs_data, id, time_points = NULL,
                       ymodel = ymodel,
                       compevent_name = compevent_name,
                       compevent_model = compevent_model,
+                      compevent_cens = compevent_cens,
+                      censor_name = censor_name,
+                      censor_model = censor_model,
                       intvars = intvars, interventions = interventions,
                       int_times = int_times, int_descript = int_descript,
                       ref_int = ref_int, intcomp = intcomp,
@@ -327,7 +378,8 @@ gformula <- function(obs_data, id, time_points = NULL,
                       nsamples = nsamples, parallel = parallel, ncores = ncores,
                       ci_method = ci_method, threads = threads,
                       model_fits = model_fits, boot_diag = boot_diag,
-                      show_progress = show_progress, ...)
+                      show_progress = show_progress, ipw_cutoff_quantile = ipw_cutoff_quantile,
+                      ipw_cutoff_value = ipw_cutoff_value, ...)
   } else if (outcome_type == 'continuous_eof'){
     gformula_continuous_eof(obs_data = obs_data, id = id,
                             time_name = time_name, covnames = covnames,
@@ -338,6 +390,8 @@ gformula <- function(obs_data, id, time_points = NULL,
                             histvars = histvars,
                             histories = histories, basecovs = basecovs,
                             outcome_name = outcome_name, ymodel = ymodel,
+                            censor_name = censor_name,
+                            censor_model = censor_model,
                             intvars = intvars, interventions = interventions,
                             int_times = int_times, int_descript = int_descript,
                             ref_int = ref_int,
@@ -349,7 +403,8 @@ gformula <- function(obs_data, id, time_points = NULL,
                             parallel = parallel, ncores = ncores,
                             ci_method = ci_method, threads = threads,
                             model_fits = model_fits, boot_diag = boot_diag,
-                            show_progress = show_progress, ...)
+                            show_progress = show_progress, ipw_cutoff_quantile = ipw_cutoff_quantile,
+                            ipw_cutoff_value = ipw_cutoff_value, ...)
   } else if (outcome_type == 'binary_eof'){
     gformula_binary_eof(obs_data = obs_data, id = id,
                         time_name = time_name, covnames = covnames,
@@ -359,6 +414,8 @@ gformula <- function(obs_data, id, time_points = NULL,
                         histvars = histvars, histories = histories,
                         basecovs = basecovs, outcome_name = outcome_name,
                         ymodel = ymodel, intvars = intvars,
+                        censor_name = censor_name,
+                        censor_model = censor_model,
                         interventions = interventions, int_times = int_times,
                         int_descript = int_descript,
                         ref_int = ref_int, visitprocess = visitprocess,
@@ -369,8 +426,8 @@ gformula <- function(obs_data, id, time_points = NULL,
                         ncores = ncores,
                         ci_method = ci_method, threads = threads,
                         model_fits = model_fits, boot_diag = boot_diag,
-                        show_progress = show_progress,
-                        ...)
+                        show_progress = show_progress, ipw_cutoff_quantile = ipw_cutoff_quantile,
+                        ipw_cutoff_value = ipw_cutoff_value, ...)
   }
 }
 
@@ -379,8 +436,18 @@ gformula <- function(obs_data, id, time_points = NULL,
 #' Estimation of Survival Outcome Under the Parametric G-Formula
 #'
 #' Based on an observed data set, this internal function estimates the risk over time under multiple
-#' user-specified interventions using the parametric g-formula. See Lin et al. (2019) for
+#' user-specified interventions using the parametric g-formula. See McGrath et al. (2020) for
 #' further details concerning the application and implementation of the parametric g-formula.
+#'
+#' To assess model misspecification in the parametric g-formula, users can obtain inverse probability (IP) weighted estimates of the natural course risk and/or means of the time-varying covariates from the observed data.
+#' See Chiu et al. (2022) for details.
+#' In addition to the general requirements described in McGrath et al. (2020), the requirements for the input data set and the call to the gformula function for such analyses are described below.
+#'
+#' Users need to include a column in \code{obs_data} with a time-varying censoring variable.
+#' Users need to indicate the name of the censoring variable and a model statement for the censoring variable with parameters \code{censor_name} and \code{censor_model}, respectively.
+#' When competing events are present, users need to include a column in \code{obs_data} with a time-varying indicator of the competing event variable and need to indicate the name of the competing event variable and the corresponding model statement with parameters \code{compevent_name} and \code{compevent_model}, respectively.
+#' Users need to indicate whether to treat competing events as censoring events with the \code{compevent_cens} parameter.
+#' Finally, users can specify how to truncate IP weights with the \code{ipw_cutoff_quantile} or \code{ipw_cutoff_value} parameters.
 #'
 #' @param id                      Character string specifying the name of the ID variable in \code{obs_data}.
 #' @param time_points             Number of time points to simulate. By default, this argument is set equal to the maximum
@@ -392,6 +459,8 @@ gformula <- function(obs_data, id, time_points = NULL,
 #' @param time_name               Character string specifying the name of the time variable in \code{obs_data}.
 #' @param outcome_name            Character string specifying the name of the outcome variable in \code{obs_data}.
 #' @param compevent_name          Character string specifying the name of the competing event variable in \code{obs_data}.
+#' @param censor_name             Character string specifying the name of the censoring variable in \code{obs_data}. Only applicable when using inverse probability weights to estimate the natural course means / risk from the observed data. See "Details".
+#' @param censor_model            Model statement for the censoring variable. Only applicable when using inverse probability weights to estimate the natural course means / risk from the observed data. See "Details".
 #' @param intvars                 List, whose elements are vectors of character strings. The kth vector in \code{intvars} specifies the name(s) of the variable(s) to be intervened
 #'                                on in each round of the simulation under the kth intervention in \code{interventions}.
 #' @param interventions           List, whose elements are lists of vectors. Each list in \code{interventions} specifies a unique intervention on the relevant variable(s) in \code{intvars}. Each vector contains a function
@@ -458,6 +527,11 @@ gformula <- function(obs_data, id, time_points = NULL,
 #'                                of consecutive visits that can be missed before an
 #'                                individual is censored. The default is \code{NA}.
 #' @param compevent_model         Model statement for the competing event variable. The default is \code{NA}.
+#' @param compevent_cens          Logical scalar indicating whether to treat competing events as censoring events.
+#'                                This argument is only applicable for survival outcomes and when a competing even model is supplied (i.e., \code{compevent_name} and \code{compevent_model} are specified).
+#'                                If this argument is set to \code{TRUE}, the competing event model will only be used to construct inverse probability weights to estimate the natural course means / risk from the observed data.
+#'                                If this argument is set to \code{FALSE}, the competing event model will be used in the parametric g-formula estimates of the risk and will not be used to construct inverse probability weights.
+#'                                See "Details". The default is \code{FALSE}.
 #' @param intcomp                 List of two numbers indicating a pair of interventions to be compared by a hazard ratio.
 #'                                The default is \code{NA}, resulting in no hazard ratio calculation.
 #' @param baselags                Logical scalar for specifying the convention used for lagi and lag_cumavgi terms in the model statements when pre-baseline times are not
@@ -478,6 +552,8 @@ gformula <- function(obs_data, id, time_points = NULL,
 #' @param model_fits              Logical scalar indicating whether to return the fitted models. Note that if this argument is set to \code{TRUE}, the output of this function may use a lot of memory. The default is \code{FALSE}.
 #' @param boot_diag               Logical scalar indicating whether to return the coefficients, standard errors, and variance-covariance matrices of the parameters of the fitted models in the bootstrap samples. The default is \code{FALSE}.
 #' @param show_progress           Logical scalar indicating whether to print a progress bar for the number of bootstrap samples completed in the R console. This argument is only applicable when \code{parallel} is set to \code{FALSE} and bootstrap samples are used (i.e., \code{nsamples} is set to a value greater than 0). The default is \code{TRUE}.
+#' @param ipw_cutoff_quantile     Percentile by which to truncate inverse probability weights. The default is \code{NULL} (i.e., no truncation). See "Details".
+#' @param ipw_cutoff_value        Cutoff value by which to truncate inverse probability weights. The default is \code{NULL} (i.e., no truncation). See "Details".
 #' @param ...                     Other arguments, which are passed to the functions in \code{covpredict_custom}.
 #' @return                        An object of class \code{gformula_survival}. The object is a list with the following components:
 #' \item{result}{Results table containing the estimated risk and risk ratio for all interventions (inculding the natural course) at each time point. If bootstrapping was used, the results table includes the bootstrap mean risk ratio, standard error, and 95\% confidence interval.}
@@ -488,6 +564,7 @@ gformula <- function(obs_data, id, time_points = NULL,
 #' \item{hazardratio_val}{Hazard ratio between two interventions (if applicable).}
 #' \item{fits}{A list of the fitted models for the time-varying covariates, outcome, and competing event (if applicable). If \code{model_fits} is set to \code{FALSE}, a value of \code{NULL} is given.}
 #' \item{sim_data}{A list of data tables of the simulated data. Each element in the list corresponds to one of the interventions. If the argument \code{sim_data_b} is set to \code{FALSE}, a value of \code{NA} is given.}
+#' \item{IP_weights}{A numeric vector specifying the inverse probability weights. See "Details".}
 #' \item{bootcoeefs}{A list, where the kth element is a list containing the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
 #' \item{bootstderrs}{A list, where the kth element is a list containing the standard errors of the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
 #' \item{bootvcovs}{A list, where the kth element is a list containing the variance-covariance matrices of the parameters of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
@@ -496,6 +573,7 @@ gformula <- function(obs_data, id, time_points = NULL,
 #' The results for the g-formula simulation under various interventions only for the first and last time points are printed with the \code{\link{print.gformula_survival}} function. To generate graphs comparing the mean estimated covariate values and risks over time and mean observed covariate values and risks over time, use the \code{\link{plot.gformula_survival}} function.
 #'
 #' @seealso \code{\link{gformula}}
+#' @references Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Assessing model misspecification of the parametric g-formula in the presence of censoring. In preparation.
 #' @references McGrath S, Lin V, Zhang Z, Petito LC, Logan RW, Hernán MA, and JG Young. gfoRmula: An R package for estimating the effects of sustained treatment strategies via the parametric g-formula. Patterns. 2020;1:100008.
 #' @references Robins JM. A new approach to causal inference in mortality studies with a sustained exposure period: application to the healthy worker survivor effect. Mathematical Modelling. 1986;7:1393–1512. [Errata (1987) in Computers and Mathematics with Applications 14, 917.-921. Addendum (1987) in Computers and Mathematics with Applications 14, 923-.945. Errata (1987) to addendum in Computers and Mathematics with Applications 18, 477.].
 #' @examples
@@ -582,6 +660,30 @@ gformula <- function(obs_data, id, time_points = NULL,
 #' gform_basic
 #' }
 #'
+#' ## Using IP weighting to estimate natural course risk
+#' ## Only the natural course intervention is included for simplicity
+#' \donttest{
+#' covnames <- c('L', 'A')
+#' histories <- c(lagged)
+#' histvars <- list(c('A', 'L'))
+#' ymodel <- Y ~ L + A
+#' covtypes <- c('binary', 'normal')
+#' covparams <- list(covmodels = c(L ~ lag1_L + lag1_A,
+#'                                 A ~ lag1_L + L + lag1_A))
+#' censor_name <- 'C'
+#' censor_model <- C ~ L
+#' res_censor <- gformula(obs_data = censor_data, id = 'id',
+#'                        time_name = 't0', covnames = covnames,
+#'                        outcome_name = 'Y', outcome_type = 'survival',
+#'                        censor_name = censor_name, censor_model = censor_model,
+#'                        covtypes = covtypes,
+#'                        covparams = covparams, ymodel = ymodel,
+#'                        intvars = NULL, interventions = NULL, int_descript = NULL,
+#'                        histories = histories, histvars = histvars,
+#'                        seed = 1234)
+#' plot(res_censor)
+#' }
+#'
 #' @import data.table
 #' @export
 gformula_survival <- function(obs_data, id, time_points = NULL,
@@ -590,6 +692,8 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
                               histvars = NULL, histories = NA, basecovs = NA,
                               outcome_name, ymodel,
                               compevent_name = NULL, compevent_model = NA,
+                              compevent_cens = FALSE,
+                              censor_name = NULL, censor_model = NA,
                               intvars = NULL, interventions = NULL,
                               int_times = NULL, int_descript = NULL, ref_int = 0, intcomp = NA,
                               visitprocess = NA, restrictions = NA,
@@ -599,27 +703,36 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
                               nsamples = 0, parallel = FALSE, ncores = NA,
                               ci_method = 'percentile', threads,
                               model_fits = FALSE, boot_diag = FALSE,
-                              show_progress = TRUE, ...){
+                              show_progress = TRUE, ipw_cutoff_quantile = NULL,
+                              ipw_cutoff_value = NULL, ...){
 
   lag_indicator <- lagavg_indicator <- cumavg_indicator <- c()
   lag_indicator <- update_lag_indicator(covparams$covmodels, lag_indicator)
   lagavg_indicator <- update_lagavg_indicator(covparams$covmodels, lagavg_indicator)
   cumavg_indicator <- update_cumavg_indicator(covparams$covmodels, cumavg_indicator)
 
+  comprisk <- !(length(compevent_model) == 1 && is.na(compevent_model))
+  censor <- !(length(censor_model) == 1 && is.na(censor_model))
+
   if (!missing(ymodel)){
     lag_indicator <- update_lag_indicator(ymodel, lag_indicator)
     lagavg_indicator <- update_lagavg_indicator(ymodel, lagavg_indicator)
     cumavg_indicator <- update_cumavg_indicator(ymodel, cumavg_indicator)
   }
-  if (!(length(compevent_model) == 1 && is.na(compevent_model))){
+  if (comprisk){
     lag_indicator <- update_lag_indicator(compevent_model, lag_indicator)
     lagavg_indicator <- update_lagavg_indicator(compevent_model, lagavg_indicator)
     cumavg_indicator <- update_cumavg_indicator(compevent_model, cumavg_indicator)
   }
+  if (censor){
+    lag_indicator <- update_lag_indicator(censor_model, lag_indicator)
+    lagavg_indicator <- update_lagavg_indicator(censor_model, lagavg_indicator)
+    cumavg_indicator <- update_cumavg_indicator(censor_model, cumavg_indicator)
+  }
   histvals <- list(lag_indicator = lag_indicator, lagavg_indicator = lagavg_indicator,
                    cumavg_indicator = cumavg_indicator)
 
-  comprisk <- !(length(compevent_model) == 1 && is.na(compevent_model))
+
   if (!missing(threads)){
     setDTthreads(threads = threads)
   }
@@ -638,8 +751,18 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
               obs_data = obs_data, parallel = parallel, ncores = ncores,
               nsamples = nsamples, sim_data_b = sim_data_b,
               outcome_name = outcome_name, compevent_name = compevent_name,
-              comprisk = comprisk, covmodels = covparams$covmodels,
-              histvals = histvals)
+              comprisk = comprisk, censor = censor, censor_name = censor_name,
+              covmodels = covparams$covmodels,
+              histvals = histvals, ipw_cutoff_quantile = ipw_cutoff_quantile,
+              ipw_cutoff_value = ipw_cutoff_value)
+
+
+  if (comprisk & compevent_cens){
+    comprisk2 <- TRUE; compevent2_name <- compevent_name; compevent2_model <- compevent_model
+    comprisk <- FALSE; compevent_name <- NULL; compevent_model <- NA
+  } else {
+    comprisk2 <- FALSE; compevent2_name <- NULL; compevent2_model <- NA
+  }
 
   min_time <- min(obs_data[[time_name]])
   below_zero_indicator <- min_time < 0
@@ -751,6 +874,18 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
     fitD <- NA
     compevent_range <- NA
   }
+  if (comprisk2){
+    fitD2 <- pred_fun_D(compevent2_model, NA, obs_data_geq_0,
+                        model_fits = model_fits)
+  } else {
+    fitD2 <- NA
+  }
+  if (censor){
+    fitC <- pred_fun_D(censor_model, NA, obs_data_geq_0, model_fits = model_fits)
+  } else {
+    fitC <- NA
+  }
+
 
   obs_data_noresample <- copy(obs_data)
   len <- length(unique(obs_data$newid))
@@ -1009,6 +1144,8 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
 
   plot_info <- get_plot_info(outcome_name = outcome_name,
                              compevent_name = compevent_name,
+                             compevent2_name = compevent2_name,
+                             censor_name = censor_name,
                              time_name = time_name,
                              time_points = time_points,
                              covnames = covnames,
@@ -1016,8 +1153,14 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
                              nat_pool = nat_pool,
                              nat_result = nat_result,
                              comprisk = comprisk,
+                             comprisk2 = comprisk2,
+                             censor = censor,
+                             fitD2 = fitD2,
+                             fitC = fitC,
                              outcome_type = outcome_type,
-                             obs_data = obs_data_noresample)
+                             obs_data = obs_data_noresample,
+                             ipw_cutoff_quantile = ipw_cutoff_quantile,
+                             ipw_cutoff_value = ipw_cutoff_value)
   obs_results <- plot_info$obs_results
 
   # Generate results table
@@ -1068,6 +1211,7 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
     }
     resultdf[, 'obs_risk' := obs_results[[2]]]
   }
+  obs_risk_name <- ifelse(censor, 'IP weighted risk', 'NP Risk')
   if (nsamples > 0){
     colnames(resultdf) <- c("k", "Interv.", "g-form risk",
                             "Risk SE", "Risk lower 95% CI",
@@ -1076,8 +1220,8 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
                             "RR lower 95% CI", "RR upper 95% CI",
                             "Risk difference", "RD SE",
                             "RD lower 95% CI", "RD upper 95% CI",
-                            "NP risk")
-    setcolorder(resultdf, c("k", "Interv.", "NP risk", "g-form risk",
+                            obs_risk_name)
+    setcolorder(resultdf, c("k", "Interv.", obs_risk_name, "g-form risk",
                             "Risk SE",
                             "Risk lower 95% CI", "Risk upper 95% CI",
                             "Risk ratio", "RR SE",
@@ -1086,8 +1230,8 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
                             "RD lower 95% CI", "RD upper 95% CI"))
   } else {
     colnames(resultdf) <- c("k", "Interv.", "g-form risk", "Risk ratio",
-                            "Risk difference", "NP risk")
-    setcolorder(resultdf, c("k", "Interv.", "NP risk", "g-form risk",
+                            "Risk difference", obs_risk_name)
+    setcolorder(resultdf, c("k", "Interv.", obs_risk_name, "g-form risk",
                             "Risk ratio", "Risk difference"))
   }
 
@@ -1101,6 +1245,14 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
   if (!is.na(fitD)[[1]]){
     fits[[length(fits) + 1]] <- fitD
     names(fits)[length(fits)] <- compevent_name
+  }
+  if (!is.na(fitC)[[1]]){
+    fits[[length(fits) + 1]] <- fitC
+    names(fits)[length(fits)] <- censor_name
+  }
+  if (!is.na(fitD2)[[1]]){
+    fits[[length(fits) + 1]] <- fitD2
+    names(fits)[length(fits)] <- compevent2_name
   }
 
   # Add list of coefficients for covariates, outcome variable, and competing event
@@ -1158,6 +1310,7 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
     hazardratio_val = hr_res,
     fits = fits,
     sim_data = sim_data,
+    IP_weights = obs_results$w,
     bootcoeffs = bootcoeffs,
     bootstderrs = bootstderrs,
     bootvcovs = bootvcovs,
@@ -1179,8 +1332,17 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
 #' Estimation of Continuous End-of-Follow-Up Outcome Under the Parametric G-Formula
 #'
 #' Based on an observed data set, this internal function estimates the outcome mean at end-of-follow-up under
-#' multiple user-specified interventions using the parametric g-formula. See Lin et al. (2019) for
+#' multiple user-specified interventions using the parametric g-formula. See McGrath et al. (2020) for
 #' further details concerning the application and implementation of the parametric g-formula.
+#'
+#' To assess model misspecification in the parametric g-formula, users can obtain inverse probability (IP) weighted estimates of the natural course means of the time-varying covariates from the observed data.
+#' See Chiu et al. (2022) for details.
+#' In addition to the general requirements described in McGrath et al. (2020), the requirements for the input data set and the call to the gformula function for such analyses are described below.
+#'
+#' Users need to include a column in \code{obs_data} with a time-varying censoring variable.
+#' Users need to indicate the name of the censoring variable and a model statement for the censoring variable with parameters \code{censor_name} and \code{censor_model}, respectively.
+#' Finally, users can specify how to truncate IP weights with the \code{ipw_cutoff_quantile} or \code{ipw_cutoff_value} parameters.
+
 #'
 #' @param id                      Character string specifying the name of the ID variable in \code{obs_data}.
 #' @param obs_data                Data table containing the observed data.
@@ -1189,6 +1351,8 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
 #'                                equal to the number of subjects in \code{obs_data}.
 #' @param time_name               Character string specifying the name of the time variable in \code{obs_data}.
 #' @param outcome_name            Character string specifying the name of the outcome variable in \code{obs_data}.
+#' @param censor_name             Character string specifying the name of the censoring variable in \code{obs_data}. Only applicable when using inverse probability weights to estimate the natural course means / risk from the observed data. See "Details".
+#' @param censor_model            Model statement for the censoring variable. Only applicable when using inverse probability weights to estimate the natural course means / risk from the observed data. See "Details".
 #' @param intvars                 List, whose elements are vectors of character strings. The kth vector in \code{intvars} specifies the name(s) of the variable(s) to be intervened
 #'                                on in each round of the simulation under the kth intervention in \code{interventions}.
 #' @param interventions           List, whose elements are lists of vectors. Each list in \code{interventions} specifies a unique intervention on the relevant variable(s) in \code{intvars}. Each vector contains a function
@@ -1266,6 +1430,8 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
 #' @param model_fits              Logical scalar indicating whether to return the fitted models. Note that if this argument is set to \code{TRUE}, the output of this function may use a lot of memory. The default is \code{FALSE}.
 #' @param boot_diag               Logical scalar indicating whether to return the coefficients, standard errors, and variance-covariance matrices of the parameters of the fitted models in the bootstrap samples. The default is \code{FALSE}.
 #' @param show_progress           Logical scalar indicating whether to print a progress bar for the number of bootstrap samples completed in the R console. This argument is only applicable when \code{parallel} is set to \code{FALSE} and bootstrap samples are used (i.e., \code{nsamples} is set to a value greater than 0). The default is \code{TRUE}.
+#' @param ipw_cutoff_quantile     Percentile by which to truncate inverse probability weights. The default is \code{NULL} (i.e., no truncation). See "Details".
+#' @param ipw_cutoff_value        Cutoff value by which to truncate inverse probability weights. The default is \code{NULL} (i.e., no truncation). See "Details".
 #' @param ...                     Other arguments, which are passed to the functions in \code{covpredict_custom}.
 #'
 #' @return                        An object of class \code{gformula_continuous_eof}. The object is a list with the following components:
@@ -1276,6 +1442,7 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
 #' \item{rmses}{A list of root mean square error (RMSE) values of the fitted models.}
 #' \item{fits}{A list of the fitted models for the time-varying covariates and outcome. If \code{model_fits} is set to \code{FALSE}, a value of \code{NULL} is given.}
 #' \item{sim_data}{A list of data tables of the simulated data. Each element in the list corresponds to one of the interventions. If the argument \code{sim_data_b} is set to \code{FALSE}, a value of \code{NA} is given.}
+#' \item{IP_weights}{A numeric vector specifying the inverse probability weights. See "Details".}
 #' \item{bootcoeefs}{A list, where the kth element is a list containing the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
 #' \item{bootstderrs}{A list, where the kth element is a list containing the standard errors of the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
 #' \item{bootvcovs}{A list, where the kth element is a list containing the variance-covariance matrices of the parameters of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
@@ -1284,6 +1451,7 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
 #' The results for the g-formula simulation under various interventions for the last time point are printed with the \code{\link{print.gformula_continuous_eof}} function. To generate graphs comparing the mean estimated and observed covariate values over time, use the \code{\link{print.gformula_continuous_eof}} function.
 #'
 #' @seealso \code{\link{gformula}}
+#' @references Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Assessing model misspecification of the parametric g-formula in the presence of censoring. In preparation.
 #' @references McGrath S, Lin V, Zhang Z, Petito LC, Logan RW, Hernán MA, and JG Young. gfoRmula: An R package for estimating the effects of sustained treatment strategies via the parametric g-formula. Patterns. 2020;1:100008.
 #' @references Robins JM. A new approach to causal inference in mortality studies with a sustained exposure period: application to the healthy worker survivor effect. Mathematical Modelling. 1986;7:1393–1512. [Errata (1987) in Computers and Mathematics with Applications 14, 917.-921. Addendum (1987) in Computers and Mathematics with Applications 14, 923-.945. Errata (1987) to addendum in Computers and Mathematics with Applications 18, 477.].
 #' @examples
@@ -1334,6 +1502,7 @@ gformula_continuous_eof <- function(obs_data, id,
                                     covpredict_custom = NA, histvars = NULL,
                                     histories = NA, basecovs = NA,
                                     outcome_name, ymodel,
+                                    censor_name = NULL, censor_model = NA,
                                     intvars = NULL, interventions = NULL,
                                     int_times = NULL, int_descript = NULL, ref_int = 0,
                                     visitprocess = NA, restrictions = NA,
@@ -1342,21 +1511,30 @@ gformula_continuous_eof <- function(obs_data, id,
                                     parallel = FALSE, ncores = NA,
                                     ci_method = 'percentile', threads,
                                     model_fits = FALSE, boot_diag = FALSE,
-                                    show_progress = TRUE, ...){
+                                    show_progress = TRUE, ipw_cutoff_quantile = NULL,
+                                    ipw_cutoff_value = NULL, ...){
 
   lag_indicator <- lagavg_indicator <- cumavg_indicator <- c()
   lag_indicator <- update_lag_indicator(covparams$covmodels, lag_indicator)
   lagavg_indicator <- update_lagavg_indicator(covparams$covmodels, lagavg_indicator)
   cumavg_indicator <- update_cumavg_indicator(covparams$covmodels, cumavg_indicator)
 
+  censor <- !(length(censor_model) == 1 && is.na(censor_model))
+
   if (!missing(ymodel)){
     lag_indicator <- update_lag_indicator(ymodel, lag_indicator)
     lagavg_indicator <- update_lagavg_indicator(ymodel, lagavg_indicator)
     cumavg_indicator <- update_cumavg_indicator(ymodel, cumavg_indicator)
   }
+  if (censor){
+    lag_indicator <- update_lag_indicator(censor_model, lag_indicator)
+    lagavg_indicator <- update_lagavg_indicator(censor_model, lagavg_indicator)
+    cumavg_indicator <- update_cumavg_indicator(censor_model, cumavg_indicator)
+  }
   histvals <- list(lag_indicator = lag_indicator, lagavg_indicator = lagavg_indicator,
                    cumavg_indicator = cumavg_indicator)
-  comprisk = FALSE
+
+  comprisk <- FALSE; comprisk2 <- FALSE
 
   if (!missing(threads)){
     setDTthreads(threads = threads)
@@ -1365,8 +1543,8 @@ gformula_continuous_eof <- function(obs_data, id,
     threads <- getDTthreads()
   }
   outcome_type <- 'continuous_eof'
-  compevent_model <- NA
-  compevent_name <- NULL
+  compevent_model <- NA; compevent2_model <- NA
+  compevent_name <- NULL; compevent2_name <- NULL
   compevent_restrictions <- NA
   hazardratio <- FALSE
   intcomp <- NA
@@ -1386,8 +1564,10 @@ gformula_continuous_eof <- function(obs_data, id,
               obs_data = obs_data, parallel = parallel, ncores = ncores,
               nsamples = nsamples, sim_data_b = sim_data_b,
               outcome_name = outcome_name, compevent_name = compevent_name,
-              comprisk = comprisk, covmodels = covparams$covmodels,
-              histvals = histvals, min_time = min_time)
+              comprisk = comprisk, censor = censor, censor_name = censor_name,
+              covmodels = covparams$covmodels,
+              histvals = histvals, ipw_cutoff_quantile = ipw_cutoff_quantile,
+              ipw_cutoff_value = ipw_cutoff_value)
 
   min_time <- min(obs_data[[time_name]])
   below_zero_indicator <- min_time < 0
@@ -1487,6 +1667,11 @@ gformula_continuous_eof <- function(obs_data, id,
   }
   fitY <- pred_fun_Y(ymodel, yrestrictions, outcome_type, outcome_name, time_name, obs_data_geq_0,
                      model_fits = model_fits)
+  if (censor){
+    fitC <- pred_fun_D(censor_model, NA, obs_data_geq_0, model_fits = model_fits)
+  } else {
+    fitC <- NA
+  }
 
   obs_data_noresample <- copy(obs_data)
   len <- length(unique(obs_data$newid))
@@ -1691,6 +1876,8 @@ gformula_continuous_eof <- function(obs_data, id,
 
   plot_info <- get_plot_info(outcome_name = outcome_name,
                              compevent_name = compevent_name,
+                             compevent2_name = compevent2_name,
+                             censor_name = censor_name,
                              time_name = time_name,
                              time_points = time_points,
                              covnames = covnames,
@@ -1698,8 +1885,13 @@ gformula_continuous_eof <- function(obs_data, id,
                              nat_pool = nat_pool,
                              nat_result = nat_result,
                              comprisk = comprisk,
+                             comprisk2 = comprisk2,
+                             censor = censor,
+                             fitC = fitC,
                              outcome_type = outcome_type,
-                             obs_data = obs_data_noresample)
+                             obs_data = obs_data_noresample,
+                             ipw_cutoff_quantile = ipw_cutoff_quantile,
+                             ipw_cutoff_value = ipw_cutoff_value)
   obs_results <- plot_info$obs_results
 
   # Generate results table
@@ -1744,7 +1936,7 @@ gformula_continuous_eof <- function(obs_data, id,
   }
 
   resultdf$obs_risk <- c(utils::tail(obs_results[[2]], 1), rep(NA, dim(resultdf)[1] - 1))
-
+  obs_mean_name <- ifelse(censor, 'IP weighted mean', 'NP mean')
   if (nsamples > 0){
     colnames(resultdf) <- c("k", "Interv.", "g-form mean",
                             "Mean SE",
@@ -1753,8 +1945,8 @@ gformula_continuous_eof <- function(obs_data, id,
                             "MR SE", "MR lower 95% CI", "MR upper 95% CI",
                             "Mean difference",
                             "MD SE", "MD lower 95% CI", "MD upper 95% CI",
-                            "NP mean")
-    setcolorder(resultdf, c("k", "Interv.", "NP mean", "g-form mean",
+                            obs_mean_name)
+    setcolorder(resultdf, c("k", "Interv.", obs_mean_name, "g-form mean",
                             "Mean SE",
                             "Mean lower 95% CI", "Mean upper 95% CI",
                             "Mean ratio",
@@ -1763,8 +1955,8 @@ gformula_continuous_eof <- function(obs_data, id,
                             "MD SE", "MD lower 95% CI", "MD upper 95% CI"))
   } else {
     colnames(resultdf) <- c("k", "Interv.", "g-form mean", "Mean ratio",
-                            "Mean difference", "NP mean")
-    setcolorder(resultdf, c("k", "Interv.", "NP mean", "g-form mean",
+                            "Mean difference", obs_mean_name)
+    setcolorder(resultdf, c("k", "Interv.", obs_mean_name, "g-form mean",
                             "Mean ratio", "Mean difference"))
   }
 
@@ -1774,6 +1966,10 @@ gformula_continuous_eof <- function(obs_data, id,
     names(fits)[length(fits)] <- outcome_name
   } else {
     fits <- list(fitY)
+  }
+  if (!is.na(fitC)[[1]]){
+    fits[[length(fits) + 1]] <- fitC
+    names(fits)[length(fits)] <- censor_name
   }
 
   # Add list of coefficients for covariates, outcome variable, and competing event
@@ -1824,6 +2020,7 @@ gformula_continuous_eof <- function(obs_data, id,
     rmses = rmses,
     fits = fits,
     sim_data = sim_data,
+    IP_weights = obs_results$w,
     bootcoeffs = bootcoeffs,
     bootstderrs = bootstderrs,
     bootvcovs = bootvcovs,
@@ -1842,8 +2039,16 @@ gformula_continuous_eof <- function(obs_data, id,
 #' Estimation of Binary End-of-Follow-Up Outcome Under the Parametric G-Formula
 #'
 #' Based on an observed data set, this internal function estimates the outcome probability at
-#' end-of-follow-up under multiple user-specified interventions using the parametric g-formula. See Lin et al. (2019) for
+#' end-of-follow-up under multiple user-specified interventions using the parametric g-formula. See McGrath et al. (2020) for
 #' further details concerning the application and implementation of the parametric g-formula.
+#'
+#' To assess model misspecification in the parametric g-formula, users can obtain inverse probability (IP) weighted estimates of the natural course means of the time-varying covariates from the observed data.
+#' See Chiu et al. (2022) for details.
+#' In addition to the general requirements described in McGrath et al. (2020), the requirements for the input data set and the call to the gformula function for such analyses are described below.
+#'
+#' Users need to include a column in \code{obs_data} with a time-varying censoring variable.
+#' Users need to indicate the name of the censoring variable and a model statement for the censoring variable with parameters \code{censor_name} and \code{censor_model}, respectively.
+#' Finally, users can specify how to truncate IP weights with the \code{ipw_cutoff_quantile} or \code{ipw_cutoff_value} parameters.
 #'
 #' @param id                      Character string specifying the name of the ID variable in \code{obs_data}.
 #' @param obs_data                Data table containing the observed data.
@@ -1852,6 +2057,8 @@ gformula_continuous_eof <- function(obs_data, id,
 #'                                equal to the number of subjects in \code{obs_data}.
 #' @param time_name               Character string specifying the name of the time variable in \code{obs_data}.
 #' @param outcome_name            Character string specifying the name of the outcome variable in \code{obs_data}.
+#' @param censor_name             Character string specifying the name of the censoring variable in \code{obs_data}. Only applicable when using inverse probability weights to estimate the natural course means / risk from the observed data. See "Details".
+#' @param censor_model            Model statement for the censoring variable. Only applicable when using inverse probability weights to estimate the natural course means / risk from the observed data. See "Details".
 #' @param intvars                 List, whose elements are vectors of character strings. The kth vector in \code{intvars} specifies the name(s) of the variable(s) to be intervened
 #'                                on in each round of the simulation under the kth intervention in \code{interventions}.
 #' @param interventions           List, whose elements are lists of vectors. Each list in \code{interventions} specifies a unique intervention on the relevant variable(s) in \code{intvars}. Each vector contains a function
@@ -1929,6 +2136,8 @@ gformula_continuous_eof <- function(obs_data, id,
 #' @param model_fits              Logical scalar indicating whether to return the fitted models. Note that if this argument is set to \code{TRUE}, the output of this function may use a lot of memory. The default is \code{FALSE}.
 #' @param boot_diag               Logical scalar indicating whether to return the coefficients, standard errors, and variance-covariance matrices of the parameters of the fitted models in the bootstrap samples. The default is \code{FALSE}.
 #' @param show_progress           Logical scalar indicating whether to print a progress bar for the number of bootstrap samples completed in the R console. This argument is only applicable when \code{parallel} is set to \code{FALSE} and bootstrap samples are used (i.e., \code{nsamples} is set to a value greater than 0). The default is \code{TRUE}.
+#' @param ipw_cutoff_quantile     Percentile by which to truncate inverse probability weights. The default is \code{NULL} (i.e., no truncation). See "Details".
+#' @param ipw_cutoff_value        Cutoff value by which to truncate inverse probability weights. The default is \code{NULL} (i.e., no truncation). See "Details".
 #' @param ...                     Other arguments, which are passed to the functions in \code{covpredict_custom}.
 #'
 #' @return An object of class \code{gformula_binary_eof}. The object is a list with the following components:
@@ -1939,6 +2148,7 @@ gformula_continuous_eof <- function(obs_data, id,
 #' \item{rmses}{A list of root mean square error (RMSE) values of the fitted models.}
 #' \item{fits}{A list of the fitted models for the time-varying covariates and outcome. If \code{model_fits} is set to \code{FALSE}, a value of \code{NULL} is given.}
 #' \item{sim_data}{A list of data tables of the simulated data. Each element in the list corresponds to one of the interventions. If the argument \code{sim_data_b} is set to \code{FALSE}, a value of \code{NA} is given.}
+#' \item{IP_weights}{A numeric vector specifying the inverse probability weights. See "Details".}
 #' \item{bootcoeefs}{A list, where the kth element is a list containing the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
 #' \item{bootstderrs}{A list, where the kth element is a list containing the standard errors of the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
 #' \item{bootvcovs}{A list, where the kth element is a list containing the variance-covariance matrices of the parameters of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
@@ -1947,6 +2157,7 @@ gformula_continuous_eof <- function(obs_data, id,
 #' The results for the g-formula simulation under various interventions for the last time point are printed with the \code{\link{print.gformula_binary_eof}} function. To generate graphs comparing the mean estimated and observed covariate values over time, use the \code{\link{plot.gformula_binary_eof}} function.
 #'
 #' @seealso \code{\link{gformula}}
+#' @references Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Assessing model misspecification of the parametric g-formula in the presence of censoring. In preparation.
 #' @references McGrath S, Lin V, Zhang Z, Petito LC, Logan RW, Hernán MA, and JG Young. gfoRmula: An R package for estimating the effects of sustained treatment strategies via the parametric g-formula. Patterns. 2020;1:100008.
 #' @references Robins JM. A new approach to causal inference in mortality studies with a sustained exposure period: application to the healthy worker survivor effect. Mathematical Modelling. 1986;7:1393–1512. [Errata (1987) in Computers and Mathematics with Applications 14, 917.-921. Addendum (1987) in Computers and Mathematics with Applications 14, 923-.945. Errata (1987) to addendum in Computers and Mathematics with Applications 18, 477.].
 #' @examples
@@ -1998,6 +2209,7 @@ gformula_binary_eof <- function(obs_data, id,
                                 time_name, covnames, covtypes, covparams,
                                 covfits_custom = NA, covpredict_custom = NA,
                                 histvars = NULL, histories = NA, basecovs = NA,
+                                censor_name = NULL, censor_model = NA,
                                 outcome_name, ymodel, intvars = NULL,
                                 interventions = NULL, int_times = NULL, int_descript = NULL,
                                 ref_int = 0, visitprocess = NA,
@@ -2006,21 +2218,29 @@ gformula_binary_eof <- function(obs_data, id,
                                 nsamples = 0, parallel = FALSE, ncores = NA,
                                 ci_method = 'percentile', threads,
                                 model_fits = FALSE, boot_diag = FALSE,
-                                show_progress = TRUE, ...){
+                                show_progress = TRUE, ipw_cutoff_quantile = NULL,
+                                ipw_cutoff_value = NULL, ...){
 
   lag_indicator <- lagavg_indicator <- cumavg_indicator <- c()
   lag_indicator <- update_lag_indicator(covparams$covmodels, lag_indicator)
   lagavg_indicator <- update_lagavg_indicator(covparams$covmodels, lagavg_indicator)
   cumavg_indicator <- update_cumavg_indicator(covparams$covmodels, cumavg_indicator)
 
+  censor <- !(length(censor_model) == 1 && is.na(censor_model))
+
   if (!missing(ymodel)){
     lag_indicator <- update_lag_indicator(ymodel, lag_indicator)
     lagavg_indicator <- update_lagavg_indicator(ymodel, lagavg_indicator)
     cumavg_indicator <- update_cumavg_indicator(ymodel, cumavg_indicator)
   }
+  if (censor){
+    lag_indicator <- update_lag_indicator(censor_model, lag_indicator)
+    lagavg_indicator <- update_lagavg_indicator(censor_model, lagavg_indicator)
+    cumavg_indicator <- update_cumavg_indicator(censor_model, cumavg_indicator)
+  }
   histvals <- list(lag_indicator = lag_indicator, lagavg_indicator = lagavg_indicator,
                    cumavg_indicator = cumavg_indicator)
-  comprisk = FALSE
+  comprisk <- FALSE; comprisk2 <- FALSE
 
   if (!missing(threads)){
     setDTthreads(threads = threads)
@@ -2029,8 +2249,8 @@ gformula_binary_eof <- function(obs_data, id,
     threads <- getDTthreads()
   }
   outcome_type <- 'binary_eof'
-  compevent_model <- NA
-  compevent_name <- NULL
+  compevent_model <- NA; compevent2_model <- NA
+  compevent_name <- NULL; compevent2_name <- NULL
   compevent_restrictions <- NA
   hazardratio <- FALSE
   intcomp <- NA
@@ -2050,8 +2270,10 @@ gformula_binary_eof <- function(obs_data, id,
               obs_data = obs_data, parallel = parallel, ncores = ncores,
               nsamples = nsamples, sim_data_b = sim_data_b,
               outcome_name = outcome_name, compevent_name = compevent_name,
-              comprisk = comprisk, covmodels = covparams$covmodels,
-              histvals = histvals, min_time = min_time)
+              comprisk = comprisk, censor = censor, censor_name = censor_name,
+              covmodels = covparams$covmodels,
+              histvals = histvals, ipw_cutoff_quantile = ipw_cutoff_quantile,
+              ipw_cutoff_value = ipw_cutoff_value)
 
   min_time <- min(obs_data[[time_name]])
   below_zero_indicator <- min_time < 0
@@ -2146,6 +2368,11 @@ gformula_binary_eof <- function(obs_data, id,
   }
   fitY <- pred_fun_Y(ymodel, yrestrictions, outcome_type, outcome_name, time_name, obs_data_geq_0,
                      model_fits = model_fits)
+  if (censor){
+    fitC <- pred_fun_D(censor_model, NA, obs_data_geq_0, model_fits = model_fits)
+  } else {
+    fitC <- NA
+  }
 
   obs_data_noresample <- copy(obs_data)
   len <- length(unique(obs_data$newid))
@@ -2351,6 +2578,8 @@ gformula_binary_eof <- function(obs_data, id,
 
   plot_info <- get_plot_info(outcome_name = outcome_name,
                              compevent_name = compevent_name,
+                             compevent2_name = compevent2_name,
+                             censor_name = censor_name,
                              time_name = time_name,
                              time_points = time_points,
                              covnames = covnames,
@@ -2358,8 +2587,13 @@ gformula_binary_eof <- function(obs_data, id,
                              nat_pool = nat_pool,
                              nat_result = nat_result,
                              comprisk = comprisk,
+                             comprisk2 = comprisk2,
+                             censor = censor,
+                             fitC = fitC,
                              outcome_type = outcome_type,
-                             obs_data = obs_data_noresample)
+                             obs_data = obs_data_noresample,
+                             ipw_cutoff_quantile = ipw_cutoff_quantile,
+                             ipw_cutoff_value = ipw_cutoff_value)
   obs_results <- plot_info$obs_results
 
   # Generate results table
@@ -2404,7 +2638,7 @@ gformula_binary_eof <- function(obs_data, id,
   }
 
   resultdf[, 'obs_risk' := c(utils::tail(obs_results[[2]], 1), rep(NA, dim(resultdf)[1] - 1))]
-
+  obs_mean_name <- ifelse(censor, 'IP weighted mean', 'NP mean')
   if (nsamples > 0){
     colnames(resultdf) <- c("k", "Interv.", "g-form mean",
                             "Mean SE",
@@ -2413,8 +2647,8 @@ gformula_binary_eof <- function(obs_data, id,
                             "MR SE", "MR lower 95% CI", "MR upper 95% CI",
                             "Mean difference",
                             "MD SE", "MD lower 95% CI", "MD upper 95% CI",
-                            "NP mean")
-    setcolorder(resultdf, c("k", "Interv.", "NP mean", "g-form mean",
+                            obs_mean_name)
+    setcolorder(resultdf, c("k", "Interv.", obs_mean_name, "g-form mean",
                             "Mean SE",
                             "Mean lower 95% CI", "Mean upper 95% CI",
                             "Mean ratio",
@@ -2423,8 +2657,8 @@ gformula_binary_eof <- function(obs_data, id,
                             "MD SE", "MD lower 95% CI", "MD upper 95% CI"))
   } else {
     colnames(resultdf) <- c("k", "Interv.", "g-form mean", "Mean ratio",
-                            "Mean difference", "NP mean")
-    setcolorder(resultdf, c("k", "Interv.", "NP mean", "g-form mean",
+                            "Mean difference", obs_mean_name)
+    setcolorder(resultdf, c("k", "Interv.", obs_mean_name, "g-form mean",
                             "Mean ratio", "Mean difference"))
   }
 
@@ -2434,6 +2668,10 @@ gformula_binary_eof <- function(obs_data, id,
     names(fits)[length(fits)] <- outcome_name
   } else {
     fits <- list(fitY)
+  }
+  if (!is.na(fitC)[[1]]){
+    fits[[length(fits) + 1]] <- fitC
+    names(fits)[length(fits)] <- censor_name
   }
 
   # Add list of coefficients for covariates, outcome variable, and competing event
@@ -2484,6 +2722,7 @@ gformula_binary_eof <- function(obs_data, id,
     rmses = rmses,
     fits = fits,
     sim_data = sim_data,
+    IP_weights = obs_results$w,
     bootcoeffs = bootcoeffs,
     bootstderrs = bootstderrs,
     bootvcovs = bootvcovs,

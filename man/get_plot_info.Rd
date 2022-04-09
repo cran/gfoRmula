@@ -7,6 +7,8 @@
 get_plot_info(
   outcome_name,
   compevent_name,
+  compevent2_name,
+  censor_name,
   time_name,
   time_points,
   covnames,
@@ -14,14 +16,24 @@ get_plot_info(
   nat_pool,
   nat_result,
   comprisk,
+  comprisk2,
+  censor,
+  fitD2,
+  fitC,
   outcome_type,
-  obs_data
+  obs_data,
+  ipw_cutoff_quantile,
+  ipw_cutoff_value
 )
 }
 \arguments{
 \item{outcome_name}{Character string specifying the name of the outcome variable in \code{obs_data}.}
 
 \item{compevent_name}{Character string specifying the name of the competing event variable in \code{obs_data}.}
+
+\item{compevent2_name}{Character string specifying the name of the competing event variable in \code{obs_data} if competing events are treated as censoring events.}
+
+\item{censor_name}{Character string specifying the name of the censoring variable in \code{obs_data}.}
 
 \item{time_name}{Character string specifying the name of the time variable in \code{obs_data}.}
 
@@ -37,9 +49,21 @@ get_plot_info(
 
 \item{comprisk}{Logical scalar indicating the presence of a competing event.}
 
+\item{comprisk2}{Logical scalar indicating whether competing events are treated as censoring events.}
+
+\item{censor}{Logical scalar indicating the presence of a censoring variable in \code{obs_data}.}
+
+\item{fitD2}{Model fit for the competing event variable if competing events are treated as censoring events.}
+
+\item{fitC}{Model fit for the censoring variable.}
+
 \item{outcome_type}{Character string specifying the "type" of the outcome. The possible "types" are: \code{"survival"}, \code{"continuous_eof"}, and \code{"binary_eof"}.}
 
 \item{obs_data}{Data table containing observed data.}
+
+\item{ipw_cutoff_quantile}{Percentile by which to truncate inverse probability weights.}
+
+\item{ipw_cutoff_value}{Cutoff value by which to truncate inverse probability weights.}
 }
 \value{
 A list with the following components:
@@ -48,6 +72,6 @@ A list with the following components:
 \item{dt_obs_plot}{For outcomes of type \code{"survival"}, a list of data tables. The data tables contain the observed and simulated risks and survival under each time point. For other outcomes, a value of \code{NA} is given.}
 }
 \description{
-This internal function obtains the data tables necessary for plotting. For continuous and binary covariates, the mean observed and simulated values are obtained for each time point. For categorical covariates, the observed and simulated counts of the levels of the factors are obtained for each time point.  When the outcome is of type \code{"survival"}, the observed and simulated risk and survival are obtained for each time point.
+This internal function obtains the data tables necessary for plotting. For continuous and binary covariates, the mean observed and simulated values are obtained for each time point. For categorical covariates, the observed and simulated means of the levels of the factors are obtained for each time point.  When the outcome is of type \code{"survival"}, the observed and simulated risk and survival are obtained for each time point.
 }
 \keyword{internal}

@@ -21,6 +21,9 @@ gformula_survival(
   ymodel,
   compevent_name = NULL,
   compevent_model = NA,
+  compevent_cens = FALSE,
+  censor_name = NULL,
+  censor_model = NA,
   intvars = NULL,
   interventions = NULL,
   int_times = NULL,
@@ -43,6 +46,8 @@ gformula_survival(
   model_fits = FALSE,
   boot_diag = FALSE,
   show_progress = TRUE,
+  ipw_cutoff_quantile = NULL,
+  ipw_cutoff_value = NULL,
   ...
 )
 }
@@ -94,6 +99,16 @@ in \code{histories} is to be applied.}
 \item{compevent_name}{Character string specifying the name of the competing event variable in \code{obs_data}.}
 
 \item{compevent_model}{Model statement for the competing event variable. The default is \code{NA}.}
+
+\item{compevent_cens}{Logical scalar indicating whether to treat competing events as censoring events.
+This argument is only applicable for survival outcomes and when a competing even model is supplied (i.e., \code{compevent_name} and \code{compevent_model} are specified).
+If this argument is set to \code{TRUE}, the competing event model will only be used to construct inverse probability weights to estimate the natural course means / risk from the observed data.
+If this argument is set to \code{FALSE}, the competing event model will be used in the parametric g-formula estimates of the risk and will not be used to construct inverse probability weights.
+See "Details". The default is \code{FALSE}.}
+
+\item{censor_name}{Character string specifying the name of the censoring variable in \code{obs_data}. Only applicable when using inverse probability weights to estimate the natural course means / risk from the observed data. See "Details".}
+
+\item{censor_model}{Model statement for the censoring variable. Only applicable when using inverse probability weights to estimate the natural course means / risk from the observed data. See "Details".}
 
 \item{intvars}{List, whose elements are vectors of character strings. The kth vector in \code{intvars} specifies the name(s) of the variable(s) to be intervened
 on in each round of the simulation under the kth intervention in \code{interventions}.}
@@ -181,6 +196,10 @@ In many applications, users may wish to set this argument equal to \code{paralle
 
 \item{show_progress}{Logical scalar indicating whether to print a progress bar for the number of bootstrap samples completed in the R console. This argument is only applicable when \code{parallel} is set to \code{FALSE} and bootstrap samples are used (i.e., \code{nsamples} is set to a value greater than 0). The default is \code{TRUE}.}
 
+\item{ipw_cutoff_quantile}{Percentile by which to truncate inverse probability weights. The default is \code{NULL} (i.e., no truncation). See "Details".}
+
+\item{ipw_cutoff_value}{Cutoff value by which to truncate inverse probability weights. The default is \code{NULL} (i.e., no truncation). See "Details".}
+
 \item{...}{Other arguments, which are passed to the functions in \code{covpredict_custom}.}
 }
 \value{
@@ -193,6 +212,7 @@ An object of class \code{gformula_survival}. The object is a list with the follo
 \item{hazardratio_val}{Hazard ratio between two interventions (if applicable).}
 \item{fits}{A list of the fitted models for the time-varying covariates, outcome, and competing event (if applicable). If \code{model_fits} is set to \code{FALSE}, a value of \code{NULL} is given.}
 \item{sim_data}{A list of data tables of the simulated data. Each element in the list corresponds to one of the interventions. If the argument \code{sim_data_b} is set to \code{FALSE}, a value of \code{NA} is given.}
+\item{IP_weights}{A numeric vector specifying the inverse probability weights. See "Details".}
 \item{bootcoeefs}{A list, where the kth element is a list containing the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
 \item{bootstderrs}{A list, where the kth element is a list containing the standard errors of the coefficients of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
 \item{bootvcovs}{A list, where the kth element is a list containing the variance-covariance matrices of the parameters of the fitted models corresponding to the kth bootstrap sample. If \code{boot_diag} is set to \code{FALSE}, a value of \code{NULL} is given.}
@@ -202,8 +222,19 @@ The results for the g-formula simulation under various interventions only for th
 }
 \description{
 Based on an observed data set, this internal function estimates the risk over time under multiple
-user-specified interventions using the parametric g-formula. See Lin et al. (2019) for
+user-specified interventions using the parametric g-formula. See McGrath et al. (2020) for
 further details concerning the application and implementation of the parametric g-formula.
+}
+\details{
+To assess model misspecification in the parametric g-formula, users can obtain inverse probability (IP) weighted estimates of the natural course risk and/or means of the time-varying covariates from the observed data.
+See Chiu et al. (2022) for details.
+In addition to the general requirements described in McGrath et al. (2020), the requirements for the input data set and the call to the gformula function for such analyses are described below.
+
+Users need to include a column in \code{obs_data} with a time-varying censoring variable.
+Users need to indicate the name of the censoring variable and a model statement for the censoring variable with parameters \code{censor_name} and \code{censor_model}, respectively.
+When competing events are present, users need to include a column in \code{obs_data} with a time-varying indicator of the competing event variable and need to indicate the name of the competing event variable and the corresponding model statement with parameters \code{compevent_name} and \code{compevent_model}, respectively.
+Users need to indicate whether to treat competing events as censoring events with the \code{compevent_cens} parameter.
+Finally, users can specify how to truncate IP weights with the \code{ipw_cutoff_quantile} or \code{ipw_cutoff_value} parameters.
 }
 \examples{
 ## Estimating the effect of static treatment strategies on risk of a
@@ -289,8 +320,34 @@ gform_basic <- gformula_survival(obs_data = basicdata, id = id,
 gform_basic
 }
 
+## Using IP weighting to estimate natural course risk
+## Only the natural course intervention is included for simplicity
+\donttest{
+covnames <- c('L', 'A')
+histories <- c(lagged)
+histvars <- list(c('A', 'L'))
+ymodel <- Y ~ L + A
+covtypes <- c('binary', 'normal')
+covparams <- list(covmodels = c(L ~ lag1_L + lag1_A,
+                                A ~ lag1_L + L + lag1_A))
+censor_name <- 'C'
+censor_model <- C ~ L
+res_censor <- gformula(obs_data = censor_data, id = 'id',
+                       time_name = 't0', covnames = covnames,
+                       outcome_name = 'Y', outcome_type = 'survival',
+                       censor_name = censor_name, censor_model = censor_model,
+                       covtypes = covtypes,
+                       covparams = covparams, ymodel = ymodel,
+                       intvars = NULL, interventions = NULL, int_descript = NULL,
+                       histories = histories, histvars = histvars,
+                       seed = 1234)
+plot(res_censor)
+}
+
 }
 \references{
+Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Assessing model misspecification of the parametric g-formula in the presence of censoring. In preparation.
+
 McGrath S, Lin V, Zhang Z, Petito LC, Logan RW, Hernán MA, and JG Young. gfoRmula: An R package for estimating the effects of sustained treatment strategies via the parametric g-formula. Patterns. 2020;1:100008.
 
 Robins JM. A new approach to causal inference in mortality studies with a sustained exposure period: application to the healthy worker survivor effect. Mathematical Modelling. 1986;7:1393–1512. [Errata (1987) in Computers and Mathematics with Applications 14, 917.-921. Addendum (1987) in Computers and Mathematics with Applications 14, 923-.945. Errata (1987) to addendum in Computers and Mathematics with Applications 18, 477.].

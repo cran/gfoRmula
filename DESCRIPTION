@@ -1,6 +1,6 @@
 Package: gfoRmula
 Title: Parametric G-Formula
-Version: 0.3.2
+Version: 1.0.0
 Authors@R: c(person("Victoria", "Lin", role = c("aut"), 
                      email = "vlin@alumni.harvard.edu", 
                      comment = "V. Lin and S. McGrath made equal 
@@ -37,11 +37,11 @@ Description: Implements the parametric g-formula algorithm of Robins (1986)
     survival outcomes; 5) a random measurement/visit process; 6) joint 
     interventions on multiple treatments; and 7) general incorporation of a 
     priori knowledge of the data structure.
-Depends: R (>= 3.4.0)
+Depends: R (>= 3.5.0)
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2
 Imports: data.table, ggplot2, ggpubr, grDevices, nnet, parallel,
         progress, stats, stringr, survival, truncnorm, truncreg, utils
 Suggests: Hmisc
@@ -49,7 +49,7 @@ URL: https://github.com/CausalInference/gfoRmula,
         https://www.cell.com/patterns/fulltext/S2666-3899(20)30008-8
 BugReports: https://github.com/CausalInference/gfoRmula/issues
 NeedsCompilation: no
-Packaged: 2021-07-13 05:53:49 UTC; Sean
+Packaged: 2022-04-09 19:41:41 UTC; Sean
 Author: Victoria Lin [aut] (V. Lin and S. McGrath made equal contributions),
   Sean McGrath [aut, cre] (<https://orcid.org/0000-0002-7281-3516>, V.
     Lin and S. McGrath made equal contributions),
@@ -63,4 +63,4 @@ Author: Victoria Lin [aut] (V. Lin and S. McGrath made equal contributions),
   2019 The President and Fellows of Harvard College [cph]
 Maintainer: Sean McGrath <sean_mcgrath@g.harvard.edu>
 Repository: CRAN
-Date/Publication: 2021-07-13 06:30:02 UTC
+Date/Publication: 2022-04-09 20:02:28 UTC
