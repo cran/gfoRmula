@@ -131,6 +131,9 @@ predict_trunc_normal <- function(x, mean, est_sd, a, b){
 #' @param min_time                Numeric scalar specifying lowest value of time \eqn{t} in the observed data set.
 #' @param show_progress           Logical scalar indicating whether to print a progress bar for the number of bootstrap samples completed in the R console. This argument is only applicable when \code{parallel} is set to \code{FALSE} and bootstrap samples are used (i.e., \code{nsamples} is set to a value greater than 0). The default is \code{TRUE}.
 #' @param pb                      Progress bar R6 object. See \code{\link[progress]{progress_bar}} for further details.
+#' @param int_visit_type          Vector of logicals. The kth element is a logical specifying whether to carry forward the intervened value (rather than the natural value) of the treatment variables(s) when performing a carry forward restriction type for the kth intervention in \code{interventions}.
+#'                                When the kth element is set to \code{FALSE}, the natural value of the treatment variable(s) in the kth intervention in \code{interventions} will be carried forward.
+#'                                By default, this argument is set so that the intervened value of the treatment variable(s) is carried forward for all interventions.
 #' @param ...                     Other arguments, which are passed to the functions in \code{covpredict_custom}.
 #' @return                        A data table containing simulated data under the specified intervention.
 #' @keywords internal
@@ -143,7 +146,7 @@ simulate <- function(o, fitcov, fitY, fitD,
                      outcome_type, subseed, obs_data, time_points, parallel,
                      covnames, covtypes, covparams, covpredict_custom,
                      basecovs, max_visits, baselags, below_zero_indicator,
-                     min_time, show_progress, pb, ...){
+                     min_time, show_progress, pb, int_visit_type, ...){
   set.seed(subseed)
 
   # Mechanism of passing intervention variable and intervention is different for parallel
@@ -152,6 +155,7 @@ simulate <- function(o, fitcov, fitY, fitD,
     intvar <- intvars[[o]]
     intervention <- interventions[[o]]
     int_time <- int_times[[o]]
+    int_visit_type <- int_visit_type[o]
   } else {
     intvar <- intvars
     intervention <- interventions
@@ -175,7 +179,8 @@ simulate <- function(o, fitcov, fitY, fitD,
   }
 
   # Create histories_int and histvars_int, which are the necessary histories to create after the intervention
-  if (!(length(intvar) == 1 && intvar == 'none')) {
+  nat_course <- length(intvar == 1) && intvar == 'none'
+  if (!nat_course) {
     intvar_vec <- unique(unlist(intvar))
     histvars_int <- histories_int <- rep(list(NA), length(histvars))
     for (l in seq_along(histvars)){
@@ -198,6 +203,7 @@ simulate <- function(o, fitcov, fitY, fitD,
         pool <- obs_data[obs_data[[time_name]] <= t, ][, .SD, .SDcols = c(covnames, time_name)]
       }
       set(pool, j = 'id', value = rep(ids_unique, each = 1 - min_time))
+      set(pool, j = 'eligible_pt', value = TRUE)
       if (!is.na(basecovs[[1]])){
         setcolorder(pool, c('id', time_name, covnames, basecovs))
       } else {
@@ -206,7 +212,28 @@ simulate <- function(o, fitcov, fitY, fitD,
       newdf <- pool[pool[[time_name]] == 0]
       # Update datatable with specified treatment regime / intervention for this
       # simulation
+      if (!nat_course){
+        mycols <- match(intvar, names(newdf))
+        temp_intvar <- newdf[, ..mycols]
+
+        if (!int_visit_type){
+          for (var in intvar){
+            newdf[, eval(paste0(var, '_natural')) := newdf[[var]]]
+          }
+        }
+      }
       intfunc(newdf, pool = pool, intervention, intvar, unlist(int_time), time_name, t)
+      # Check if intervened
+      intervened <- rep(0, times = nrow(newdf))
+      if (!nat_course){
+        for (var in intvar){
+          # Check if the natural value of the intervention variable equals the intervened value
+          intervened <- intervened + (abs(temp_intvar[[var]] - newdf[[var]]) > 1e-6)
+        }
+        intervened <- ifelse(newdf$eligible_pt, intervened >= 1, NA)
+      }
+      set(newdf, j = 'intervened', value = intervened)
+
       if (ncol(newdf) > ncol(pool)){
         pool <- rbind(pool[pool[[time_name]] < t], newdf, fill = TRUE)
         pool <- pool[order(id, get(time_name))]
@@ -271,14 +298,6 @@ simulate <- function(o, fitcov, fitY, fitD,
           }
           # Simulate competing event variable
           set(newdf, j = 'D', value = stats::rbinom(data_len, 1, newdf$Pd))
-          # Set simulated competing event values outside the observed range to the observed
-          # min / max
-          if (length(newdf[newdf$D < compevent_range[1]]$D) != 0){
-            set(newdf[newdf$D < compevent_range[1]], j = 'D', value = compevent_range[1])
-          }
-          if (length(newdf[newdf$D > compevent_range[2]]$D) != 0){
-            set(newdf[newdf$D > compevent_range[2]], j = 'D', value = compevent_range[2])
-          }
           # Calculate probability of death by main event rather than competing event at
           # time t
           set(newdf, j = 'prodp1', value = newdf$Py * (1 - newdf$Pd))
@@ -477,7 +496,7 @@ simulate <- function(o, fitcov, fitY, fitD,
             if (restrictions[[r]][[1]] == covnames[i]){
               restrict_ids <- newdf[!eval(parse(text = restrictions[[r]][[2]]))]$id
               if (length(restrict_ids) != 0){
-                restrictions[[r]][[3]](newdf, pool[pool[[time_name]] < t & pool[[time_name]] >= 0], restrictions[[r]], time_name, t)
+                restrictions[[r]][[3]](newdf, pool[pool[[time_name]] < t & pool[[time_name]] >= 0], restrictions[[r]], time_name, t, int_visit_type, intvar)
               }
             }
           })
@@ -497,7 +516,28 @@ simulate <- function(o, fitcov, fitY, fitD,
       # Update datatable with specified treatment regime / intervention for this
       # simulation
       newdf <- pool[pool[[time_name]] == t]
+      if (!nat_course){
+        mycols <- match(intvar, names(newdf))
+        temp_intvar <- newdf[, ..mycols]
+
+        if (!int_visit_type){
+          for (var in intvar){
+            newdf[, eval(paste0(var, '_natural')) := newdf[[var]]]
+          }
+        }
+      }
       intfunc(newdf, pool, intervention, intvar, unlist(int_time), time_name, t)
+      # Check if intervened
+      intervened <- rep(0, times = nrow(newdf))
+      if (!nat_course){
+        for (var in intvar){
+          # Check if the natural value of the intervention variable equals the intervened value
+          intervened <- intervened + (abs(temp_intvar[[var]] - newdf[[var]]) > 1e-6)
+        }
+        intervened <- ifelse(newdf$eligible_pt, intervened >= 1, NA)
+      }
+      set(newdf, j = 'intervened', value = intervened)
+
       # Update datatable with new covariates that are functions of history of existing
       # covariates
       pool[pool[[time_name]] == t] <- newdf
@@ -525,14 +565,6 @@ simulate <- function(o, fitcov, fitY, fitD,
           }
           # Simulate competing event variable
           set(newdf, j = 'D', value = stats::rbinom(data_len, 1, newdf$Pd))
-          # Set simulated competing event values outside the observed range to the observed
-          # min / max
-          if (length(newdf[newdf$D < compevent_range[1]]$D) != 0){
-            newdf[newdf$D < compevent_range[1], "D" := compevent_range[1]]
-          }
-          if (length(newdf[newdf$D > compevent_range[2]]$D) != 0){
-            newdf[newdf$D > compevent_range[2], "D" := compevent_range[2]]
-          }
         } else {
           set(newdf, j = 'D', value = 0)
         }

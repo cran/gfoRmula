@@ -1,5 +1,17 @@
-Package Updates
----------------
+## Package Updates
+
+### Changes in Version 1.0.1 (2023-01-11)
+
+-   Added the “cumulative percent intervened on” and “average percent
+    intervened on” to the output of the `gformula()` function
+-   Added option for users to carry forward the natural value of
+    treatment rather than the intervened value. See the `int_visit_type`
+    argument in the `gformula()` function
+-   Added option for users to access the bootstrap replicates of the
+    parametric g-formula estimates. See the `boot_diag` argument in the
+    `gformula()` function.
+-   Fixed an error in computing the inverse probability weighted means
+    of the time-varying covariates
 
 ### Changes in Version 1.0.0 (2022-04-09)
 
