@@ -1,5 +1,18 @@
 ## Package Updates
 
+### Changes in Version 1.0.2 (2023-02-27)
+
+-   Revised the plot of the estimates of the natural course risk so that
+    it starts at (0, 0)
+-   Fixed an error when obtaining confidence intervals around the hazard
+    ratio estimates
+-   Fixed an error in the reported standard errors of the coefficients
+    of the fitted categorical covariate models
+-   Fixed an error in the reported root mean squared error values for
+    the outcome and competing event models
+-   Allowed categorical covariates to be of class “numeric” (rather than
+    requiring them to be of class “factor”)
+
 ### Changes in Version 1.0.1 (2023-01-11)
 
 -   Added the “cumulative percent intervened on” and “average percent
