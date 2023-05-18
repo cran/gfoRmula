@@ -1,10 +1,10 @@
-de3c90b95d058671e8967796297bce41 *DESCRIPTION
+685c6557e91904a0d39e2ab0c1eb79ff *DESCRIPTION
 356fb990d3c92c1d06a460b60923448d *NAMESPACE
-c5ca4ddb8032b408e3124269dd858742 *NEWS.md
+ed8836a309b4ee33757ce1d79f02663d *NEWS.md
 d2265faf1174cfa7d29309ba79f4768d *R/bootstrap.R
-af59a9efa3c4c0e235661a5fb1a0faac *R/comparisons.R
+147d00264e88806a278bf92f8197d219 *R/comparisons.R
 bf0792e438e7e032dba654aae2e0026b *R/data.R
-a4b01daef3972620b4554120fd575276 *R/gformula.R
+f536465ab127eb7717314f1682c41194 *R/gformula.R
 4202be2ac2dd5bdde0b12a1ffdc7fc5e *R/globals.R
 ab57ca3b0c5e85f20c465b857cdba510 *R/helper.R
 d634c50a45c745074668222a33283d29 *R/histories.R
@@ -13,7 +13,7 @@ d634c50a45c745074668222a33283d29 *R/histories.R
 60fd58cc3653482b1e057c15ecc463a1 *R/restrictions.R
 56dddb5cf8b0ff6376196084e5115a76 *R/s3methods.R
 8a4e2bbd40f5565068de81b0ed627e40 *R/simulate.R
-9d1a47a50bad6eca4386b8ee30ec379a *README.md
+5a6833c30af23cfe336e669582ac4e34 *README.md
 c3401a2ad94524bb615a6da7b1933c34 *data/basicdata.rda
 e38d3b1821bf8993245ab3c7d471ce46 *data/basicdata_nocomp.rda
 243afc80ec9d72ac40aac74bbac059fc *data/binary_eofdata.rda
@@ -37,7 +37,7 @@ bfee5a3927847d7dda7405e77cb07e87 *man/fit_trunc_normal.Rd
 cf1f6f49a0a112e65f18e5ec0a9a7335 *man/fit_zeroinfl_normal.Rd
 0c6de4b431af6af6a73b5197634755af *man/get_cvgrphs.Rd
 b14f04635b59034489063e3a83cec7ab *man/get_outgrphs.Rd
-26ae4ca4b676aae2db89dc1005081ae9 *man/get_plot_info.Rd
+ef9dd861d9d190f0f8e5d00d63e34c91 *man/get_plot_info.Rd
 49477600e29dea03c10a456b38b263e3 *man/gformula.Rd
 e9afb8897305744205d5f608da5e1e58 *man/gformula_binary_eof.Rd
 9cb0cbcea1cf7d6b98ff427add5c9948 *man/gformula_continuous_eof.Rd
@@ -47,7 +47,7 @@ c1265d4b1ba859d1afcc45de3187d006 *man/gformula_survival.Rd
 8d82464666e6ebc755eef1d7ad044809 *man/lagged.Rd
 d91360e184dc09abdc096c0474e82b23 *man/make_histories.Rd
 93cc999b003dfc2c0779e37daa155e9c *man/natural.Rd
-e5ca7c2396476667c0a75e6a96d16d21 *man/obs_calculate.Rd
+265f73da2c27067ee898f4bdbdbe9b25 *man/obs_calculate.Rd
 06a98043b76002e937257822b4949af3 *man/plot.gformula_binary_eof.Rd
 aa99f0f54199b798a35d541538b01bde *man/plot.gformula_continuous_eof.Rd
 d8af48c4ae0779e4f2a84da842940dc8 *man/plot.gformula_survival.Rd
