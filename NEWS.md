@@ -1,5 +1,20 @@
 ## Package Updates
 
+### Changes in Version 1.0.4 (2024-01-30)
+
+-   Fixed an error for joint interventions on multiple treatments
+-   Fixed an error occurring when multiple restrictions are applied to a
+    single variable
+-   Revised the `gformula()` function so that it produces a warning
+    message rather than an error message when one of the bootstrap
+    replicates fails. The bootstrap standard errors and 95% CIs are
+    calculated based on the bootstrap replicates that do not fail.
+-   Fixed an error occurring when no interventions are supplied (i.e.,
+    only the natural course intervention is used)
+-   Slightly sped up the calculation of the counterfactual cumulative
+    risks
+-   Expanded the error checking
+
 ### Changes in Version 1.0.3 (2023-05-18)
 
 -   Fixed an error in the `gformula()` function that assumed that the

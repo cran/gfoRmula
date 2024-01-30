@@ -7,7 +7,7 @@
 #' implementation of the parametric g-formula.
 #'
 #' To assess model misspecification in the parametric g-formula, users can obtain inverse probability (IP) weighted estimates of the natural course risk and/or means of the time-varying covariates from the observed data.
-#' See Chiu et al. (In press) for details.
+#' See Chiu et al. (2023) for details.
 #' In addition to the general requirements described in McGrath et al. (2020), the requirements for the input data set and the call to the gformula function for such analyses are described below.
 #'
 #' Users need to include a column in \code{obs_data} with a time-varying censoring variable.
@@ -146,7 +146,7 @@
 #'
 #' The results for the g-formula simulation are printed with the \code{\link{print.gformula_survival}}, \code{\link{print.gformula_continuous_eof}}, and \code{\link{print.gformula_binary_eof}} functions. To generate graphs comparing the mean estimated covariate values and risks over time and mean observed covariate values and risks over time, use the \code{\link{plot.gformula_survival}}, \code{\link{plot.gformula_continuous_eof}}, and \code{\link{plot.gformula_binary_eof}} functions.
 #'
-#' @references Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Evaluating model specification when using the parametric g-formula in the presence of censoring. American Journal of Epidemiology. In press.
+#' @references Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Evaluating model specification when using the parametric g-formula in the presence of censoring. American Journal of Epidemiology. 2023;192:1887–1895.
 #' @references McGrath S, Lin V, Zhang Z, Petito LC, Logan RW, Hernán MA, and JG Young. gfoRmula: An R package for estimating the effects of sustained treatment strategies via the parametric g-formula. Patterns. 2020;1:100008.
 #' @references Robins JM. A new approach to causal inference in mortality studies with a sustained exposure period: application to the healthy worker survivor effect. Mathematical Modelling. 1986;7:1393–1512. [Errata (1987) in Computers and Mathematics with Applications 14, 917.-921. Addendum (1987) in Computers and Mathematics with Applications 14, 923-.945. Errata (1987) to addendum in Computers and Mathematics with Applications 18, 477.].
 #' @examples
@@ -446,7 +446,7 @@ gformula <- function(obs_data, id, time_points = NULL,
 #' further details concerning the application and implementation of the parametric g-formula.
 #'
 #' To assess model misspecification in the parametric g-formula, users can obtain inverse probability (IP) weighted estimates of the natural course risk and/or means of the time-varying covariates from the observed data.
-#' See Chiu et al. (In press) for details.
+#' See Chiu et al. (2023) for details.
 #' In addition to the general requirements described in McGrath et al. (2020), the requirements for the input data set and the call to the gformula function for such analyses are described below.
 #'
 #' Users need to include a column in \code{obs_data} with a time-varying censoring variable.
@@ -585,7 +585,7 @@ gformula <- function(obs_data, id, time_points = NULL,
 #' The results for the g-formula simulation under various interventions only for the first and last time points are printed with the \code{\link{print.gformula_survival}} function. To generate graphs comparing the mean estimated covariate values and risks over time and mean observed covariate values and risks over time, use the \code{\link{plot.gformula_survival}} function.
 #'
 #' @seealso \code{\link{gformula}}
-#' @references Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Evaluating model specification when using the parametric g-formula in the presence of censoring. American Journal of Epidemiology. In press.
+#' @references Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Evaluating model specification when using the parametric g-formula in the presence of censoring. American Journal of Epidemiology. 2023;192:1887–1895.
 #' @references McGrath S, Lin V, Zhang Z, Petito LC, Logan RW, Hernán MA, and JG Young. gfoRmula: An R package for estimating the effects of sustained treatment strategies via the parametric g-formula. Patterns. 2020;1:100008.
 #' @references Robins JM. A new approach to causal inference in mortality studies with a sustained exposure period: application to the healthy worker survivor effect. Mathematical Modelling. 1986;7:1393–1512. [Errata (1987) in Computers and Mathematics with Applications 14, 917.-921. Addendum (1987) in Computers and Mathematics with Applications 14, 923-.945. Errata (1987) to addendum in Computers and Mathematics with Applications 18, 477.].
 #' @examples
@@ -1055,7 +1055,7 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
     if (parallel){
       cl <- prep_cluster(ncores = ncores, threads = threads , covtypes = covtypes,
                          bootstrap_option = TRUE)
-      final_bs <- parallel::parLapply(cl, 1:nsamples, bootstrap_helper, time_points = time_points,
+      final_bs <- parallel::parLapply(cl, 1:nsamples, bootstrap_helper_with_trycatch, time_points = time_points,
                                       obs_data = obs_data_noresample, bootseeds = bootseeds,
                                       intvars = comb_intvars, interventions = comb_interventions, int_times = comb_int_times, ref_int = ref_int,
                                       covparams = covparams, covnames = covnames, covtypes = covtypes,
@@ -1080,7 +1080,7 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
                                          clear = FALSE,
                                          format = 'Bootstrap progress [:bar] :percent, Elapsed time :elapsed, Est. time remaining :eta')
       }
-      final_bs <- lapply(1:nsamples, FUN = bootstrap_helper, time_points = time_points,
+      final_bs <- lapply(1:nsamples, FUN = bootstrap_helper_with_trycatch, time_points = time_points,
                          obs_data = obs_data_noresample, bootseeds = bootseeds,
                          intvars = comb_intvars, interventions = comb_interventions, int_times = comb_int_times, ref_int = ref_int,
                          covparams = covparams, covnames = covnames, covtypes = covtypes,
@@ -1117,11 +1117,11 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
     comb_result$t0 <- comb_RR$t0 <- comb_RD$t0 <-
       rep(0:(time_points - 1), nsamples)
 
-    se_result <- comb_result[, lapply(.SD, stats::sd), by = t0]
-    se_RR <- comb_RR[, lapply(.SD, stats::sd), by = t0]
-    se_RD <- comb_RD[, lapply(.SD, stats::sd), by = t0]
+    se_result <- comb_result[, lapply(.SD, stats::sd, na.rm = TRUE), by = t0]
+    se_RR <- comb_RR[, lapply(.SD, stats::sd, na.rm = TRUE), by = t0]
+    se_RD <- comb_RD[, lapply(.SD, stats::sd, na.rm = TRUE), by = t0]
     if (hazardratio){
-      hr_res[2] <- stats::sd(comb_HR$V1)
+      hr_res[2] <- stats::sd(comb_HR$V1, na.rm = TRUE)
     }
 
     if (ci_method == 'normal'){
@@ -1137,14 +1137,14 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
       }
     }
     if (ci_method == 'percentile') {
-      ci_lb_result <- comb_result[, lapply(.SD, stats::quantile, probs = 0.025), by = t0]
-      ci_lb_RR <- comb_RR[, lapply(.SD, stats::quantile, probs = 0.025), by = t0]
-      ci_lb_RD <- comb_RD[, lapply(.SD, stats::quantile, probs = 0.025), by = t0]
-      ci_ub_result <- comb_result[, lapply(.SD, stats::quantile, probs = 0.975), by = t0]
-      ci_ub_RR <- comb_RR[, lapply(.SD, stats::quantile, probs = 0.975), by = t0]
-      ci_ub_RD <- comb_RD[, lapply(.SD, stats::quantile, probs = 0.975), by = t0]
+      ci_lb_result <- comb_result[, lapply(.SD, stats::quantile, probs = 0.025, na.rm = TRUE), by = t0]
+      ci_lb_RR <- comb_RR[, lapply(.SD, stats::quantile, probs = 0.025, na.rm = TRUE), by = t0]
+      ci_lb_RD <- comb_RD[, lapply(.SD, stats::quantile, probs = 0.025, na.rm = TRUE), by = t0]
+      ci_ub_result <- comb_result[, lapply(.SD, stats::quantile, probs = 0.975, na.rm = TRUE), by = t0]
+      ci_ub_RR <- comb_RR[, lapply(.SD, stats::quantile, probs = 0.975, na.rm = TRUE), by = t0]
+      ci_ub_RD <- comb_RD[, lapply(.SD, stats::quantile, probs = 0.975, na.rm = TRUE), by = t0]
       if (hazardratio){
-        hr_res[3:4] <- stats::quantile(comb_HR$V1, probs = c(0.025, 0.975))
+        hr_res[3:4] <- stats::quantile(comb_HR$V1, probs = c(0.025, 0.975), na.rm = TRUE)
       }
     }
     if (hazardratio){
@@ -1365,7 +1365,7 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
 #' further details concerning the application and implementation of the parametric g-formula.
 #'
 #' To assess model misspecification in the parametric g-formula, users can obtain inverse probability (IP) weighted estimates of the natural course means of the time-varying covariates from the observed data.
-#' See Chiu et al. (In press) for details.
+#' See Chiu et al. (2023) for details.
 #' In addition to the general requirements described in McGrath et al. (2020), the requirements for the input data set and the call to the gformula function for such analyses are described below.
 #'
 #' Users need to include a column in \code{obs_data} with a time-varying censoring variable.
@@ -1485,7 +1485,7 @@ gformula_survival <- function(obs_data, id, time_points = NULL,
 #' The results for the g-formula simulation under various interventions for the last time point are printed with the \code{\link{print.gformula_continuous_eof}} function. To generate graphs comparing the mean estimated and observed covariate values over time, use the \code{\link{print.gformula_continuous_eof}} function.
 #'
 #' @seealso \code{\link{gformula}}
-#' @references Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Evaluating model specification when using the parametric g-formula in the presence of censoring. American Journal of Epidemiology. In press.
+#' @references Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Evaluating model specification when using the parametric g-formula in the presence of censoring. American Journal of Epidemiology. 2023;192:1887–1895.
 #' @references McGrath S, Lin V, Zhang Z, Petito LC, Logan RW, Hernán MA, and JG Young. gfoRmula: An R package for estimating the effects of sustained treatment strategies via the parametric g-formula. Patterns. 2020;1:100008.
 #' @references Robins JM. A new approach to causal inference in mortality studies with a sustained exposure period: application to the healthy worker survivor effect. Mathematical Modelling. 1986;7:1393–1512. [Errata (1987) in Computers and Mathematics with Applications 14, 917.-921. Addendum (1987) in Computers and Mathematics with Applications 14, 923-.945. Errata (1987) to addendum in Computers and Mathematics with Applications 18, 477.].
 #' @examples
@@ -1815,7 +1815,9 @@ gformula_continuous_eof <- function(obs_data, id,
   int_result[1] <- nat_result
   # Calculate mean risk over all subjects at each time for all interventions other than
   # the natural course
-  int_result[-1] <- sapply(pools, FUN = function(pool){mean(pool$Ey, na.rm = TRUE)})
+  if (length(comb_interventions) > 1){
+    int_result[-1] <- sapply(pools, FUN = function(pool){mean(pool$Ey, na.rm = TRUE)})
+  }
   result_ratio <- int_result / ref_mean
   result_diff <- int_result - ref_mean
 
@@ -1826,7 +1828,7 @@ gformula_continuous_eof <- function(obs_data, id,
     if (parallel){
       cl <- prep_cluster(ncores = ncores, threads = threads, covtypes = covtypes,
                          bootstrap_option = TRUE)
-      final_bs <- parallel::parLapply(cl, 1:nsamples, bootstrap_helper, time_points = time_points,
+      final_bs <- parallel::parLapply(cl, 1:nsamples, bootstrap_helper_with_trycatch, time_points = time_points,
                                       obs_data = obs_data_noresample, bootseeds = bootseeds,
                                       intvars = comb_intvars, interventions = comb_interventions, int_times = comb_int_times, ref_int = ref_int,
                                       covparams = covparams, covnames = covnames, covtypes = covtypes,
@@ -1852,7 +1854,7 @@ gformula_continuous_eof <- function(obs_data, id,
                                          clear = FALSE,
                                          format = 'Bootstrap progress [:bar] :percent, Elapsed time :elapsed, Est. time remaining :eta')
       }
-      final_bs <- lapply(1:nsamples, FUN = bootstrap_helper, time_points = time_points,
+      final_bs <- lapply(1:nsamples, FUN = bootstrap_helper_with_trycatch, time_points = time_points,
                          obs_data = obs_data_noresample, bootseeds = bootseeds,
                          intvars = comb_intvars, interventions = comb_interventions, int_times = comb_int_times, ref_int = ref_int,
                          covparams = covparams, covnames = covnames, covtypes = covtypes,
@@ -1884,9 +1886,9 @@ gformula_continuous_eof <- function(obs_data, id,
 
     comb_result$t0 <- comb_MR$t0 <- comb_MD$t0 <- time_points
 
-    se_result <- comb_result[, lapply(.SD, stats::sd), by = t0]
-    se_MR <- comb_MR[, lapply(.SD, stats::sd), by = t0]
-    se_MD <- comb_MD[, lapply(.SD, stats::sd), by = t0]
+    se_result <- comb_result[, lapply(.SD, stats::sd, na.rm = TRUE), by = t0]
+    se_MR <- comb_MR[, lapply(.SD, stats::sd, na.rm = TRUE), by = t0]
+    se_MD <- comb_MD[, lapply(.SD, stats::sd, na.rm = TRUE), by = t0]
 
     if (ci_method == 'normal'){
       ci_lb_result <- t(int_result) - stats::qnorm(0.975)*se_result[,-c('t0')]
@@ -1897,12 +1899,12 @@ gformula_continuous_eof <- function(obs_data, id,
       ci_ub_MD <- t(int_result) + stats::qnorm(0.975)*se_MD[,-c('t0')]
     }
     if (ci_method == 'percentile') {
-      ci_lb_result <- comb_result[, lapply(.SD, stats::quantile, probs = 0.025), by = t0]
-      ci_lb_MR <- comb_MR[, lapply(.SD, stats::quantile, probs = 0.025), by = t0]
-      ci_lb_MD <- comb_MD[, lapply(.SD, stats::quantile, probs = 0.025), by = t0]
-      ci_ub_result <- comb_result[, lapply(.SD, stats::quantile, probs = 0.975), by = t0]
-      ci_ub_MR <- comb_MR[, lapply(.SD, stats::quantile, probs = 0.975), by = t0]
-      ci_ub_MD <- comb_MD[, lapply(.SD, stats::quantile, probs = 0.975), by = t0]
+      ci_lb_result <- comb_result[, lapply(.SD, stats::quantile, probs = 0.025, na.rm = TRUE), by = t0]
+      ci_lb_MR <- comb_MR[, lapply(.SD, stats::quantile, probs = 0.025, na.rm = TRUE), by = t0]
+      ci_lb_MD <- comb_MD[, lapply(.SD, stats::quantile, probs = 0.025, na.rm = TRUE), by = t0]
+      ci_ub_result <- comb_result[, lapply(.SD, stats::quantile, probs = 0.975, na.rm = TRUE), by = t0]
+      ci_ub_MR <- comb_MR[, lapply(.SD, stats::quantile, probs = 0.975, na.rm = TRUE), by = t0]
+      ci_ub_MD <- comb_MD[, lapply(.SD, stats::quantile, probs = 0.975, na.rm = TRUE), by = t0]
     }
   }
   if (nsamples > 0 & boot_diag){
@@ -2095,7 +2097,7 @@ gformula_continuous_eof <- function(obs_data, id,
 #' further details concerning the application and implementation of the parametric g-formula.
 #'
 #' To assess model misspecification in the parametric g-formula, users can obtain inverse probability (IP) weighted estimates of the natural course means of the time-varying covariates from the observed data.
-#' See Chiu et al. (In press) for details.
+#' See Chiu et al. (2023) for details.
 #' In addition to the general requirements described in McGrath et al. (2020), the requirements for the input data set and the call to the gformula function for such analyses are described below.
 #'
 #' Users need to include a column in \code{obs_data} with a time-varying censoring variable.
@@ -2215,7 +2217,7 @@ gformula_continuous_eof <- function(obs_data, id,
 #' The results for the g-formula simulation under various interventions for the last time point are printed with the \code{\link{print.gformula_binary_eof}} function. To generate graphs comparing the mean estimated and observed covariate values over time, use the \code{\link{plot.gformula_binary_eof}} function.
 #'
 #' @seealso \code{\link{gformula}}
-#' @references Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Evaluating model specification when using the parametric g-formula in the presence of censoring. American Journal of Epidemiology. In press.
+#' @references Chiu YH, Wen L, McGrath S, Logan R, Dahabreh IJ, Hernán MA. Evaluating model specification when using the parametric g-formula in the presence of censoring. American Journal of Epidemiology. 2023;192:1887–1895.
 #' @references McGrath S, Lin V, Zhang Z, Petito LC, Logan RW, Hernán MA, and JG Young. gfoRmula: An R package for estimating the effects of sustained treatment strategies via the parametric g-formula. Patterns. 2020;1:100008.
 #' @references Robins JM. A new approach to causal inference in mortality studies with a sustained exposure period: application to the healthy worker survivor effect. Mathematical Modelling. 1986;7:1393–1512. [Errata (1987) in Computers and Mathematics with Applications 14, 917.-921. Addendum (1987) in Computers and Mathematics with Applications 14, 923-.945. Errata (1987) to addendum in Computers and Mathematics with Applications 18, 477.].
 #' @examples
@@ -2541,7 +2543,9 @@ gformula_binary_eof <- function(obs_data, id,
   int_result[1] <- nat_result
   # Calculate mean risk over all subjects at each time for all interventions other than
   # the natural course
-  int_result[-1] <- sapply(pools, FUN = function(pool){mean(pool$Py, na.rm = TRUE)})
+  if (length(comb_interventions) > 1){
+    int_result[-1] <- sapply(pools, FUN = function(pool){mean(pool$Py, na.rm = TRUE)})
+  }
   result_ratio <- int_result / ref_mean
   result_diff <- int_result - ref_mean
 
@@ -2552,7 +2556,7 @@ gformula_binary_eof <- function(obs_data, id,
     if (parallel){
       cl <- prep_cluster(ncores = ncores, threads = threads , covtypes = covtypes,
                          bootstrap_option = TRUE)
-      final_bs <- parallel::parLapply(cl, 1:nsamples, bootstrap_helper, time_points = time_points,
+      final_bs <- parallel::parLapply(cl, 1:nsamples, bootstrap_helper_with_trycatch, time_points = time_points,
                                       obs_data = obs_data_noresample, bootseeds = bootseeds,
                                       intvars = comb_intvars, interventions = comb_interventions, int_times = comb_int_times, ref_int = ref_int,
                                       covparams = covparams, covnames = covnames, covtypes = covtypes,
@@ -2578,7 +2582,7 @@ gformula_binary_eof <- function(obs_data, id,
                                          clear = FALSE,
                                          format = 'Bootstrap progress [:bar] :percent, Elapsed time :elapsed, Est. time remaining :eta')
       }
-      final_bs <- lapply(1:nsamples, FUN = bootstrap_helper, time_points = time_points,
+      final_bs <- lapply(1:nsamples, FUN = bootstrap_helper_with_trycatch, time_points = time_points,
                          obs_data = obs_data_noresample, bootseeds = bootseeds,
                          intvars = comb_intvars, interventions = comb_interventions, int_times = comb_int_times, ref_int = ref_int,
                          covparams = covparams, covnames = covnames, covtypes = covtypes,
@@ -2610,9 +2614,9 @@ gformula_binary_eof <- function(obs_data, id,
 
     comb_result$t0 <- comb_MR$t0 <- comb_MD$t0 <- time_points
 
-    se_result <- comb_result[, lapply(.SD, stats::sd), by = t0]
-    se_MR <- comb_MR[, lapply(.SD, stats::sd), by = t0]
-    se_MD <- comb_MD[, lapply(.SD, stats::sd), by = t0]
+    se_result <- comb_result[, lapply(.SD, stats::sd, na.rm = TRUE), by = t0]
+    se_MR <- comb_MR[, lapply(.SD, stats::sd, na.rm = TRUE), by = t0]
+    se_MD <- comb_MD[, lapply(.SD, stats::sd, na.rm = TRUE), by = t0]
 
     if (ci_method == 'normal'){
       ci_lb_result <- t(int_result) - stats::qnorm(0.975)*se_result[,-c('t0')]
@@ -2623,12 +2627,12 @@ gformula_binary_eof <- function(obs_data, id,
       ci_ub_MD <- t(int_result) + stats::qnorm(0.975)*se_MD[,-c('t0')]
     }
     if (ci_method == 'percentile') {
-      ci_lb_result <- comb_result[, lapply(.SD, stats::quantile, probs = 0.025), by = t0]
-      ci_lb_MR <- comb_MR[, lapply(.SD, stats::quantile, probs = 0.025), by = t0]
-      ci_lb_MD <- comb_MD[, lapply(.SD, stats::quantile, probs = 0.025), by = t0]
-      ci_ub_result <- comb_result[, lapply(.SD, stats::quantile, probs = 0.975), by = t0]
-      ci_ub_MR <- comb_MR[, lapply(.SD, stats::quantile, probs = 0.975), by = t0]
-      ci_ub_MD <- comb_MD[, lapply(.SD, stats::quantile, probs = 0.975), by = t0]
+      ci_lb_result <- comb_result[, lapply(.SD, stats::quantile, probs = 0.025, na.rm = TRUE), by = t0]
+      ci_lb_MR <- comb_MR[, lapply(.SD, stats::quantile, probs = 0.025, na.rm = TRUE), by = t0]
+      ci_lb_MD <- comb_MD[, lapply(.SD, stats::quantile, probs = 0.025, na.rm = TRUE), by = t0]
+      ci_ub_result <- comb_result[, lapply(.SD, stats::quantile, probs = 0.975, na.rm = TRUE), by = t0]
+      ci_ub_MR <- comb_MR[, lapply(.SD, stats::quantile, probs = 0.975, na.rm = TRUE), by = t0]
+      ci_ub_MD <- comb_MD[, lapply(.SD, stats::quantile, probs = 0.975, na.rm = TRUE), by = t0]
     }
   }
   if (nsamples > 0 & boot_diag){
