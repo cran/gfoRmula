@@ -19,6 +19,8 @@ gformula_survival(
   basecovs = NA,
   outcome_name,
   ymodel,
+  ymodel_fit_custom = NULL,
+  ymodel_predict_custom = NULL,
   compevent_name = NULL,
   compevent_model = NA,
   compevent_cens = FALSE,
@@ -49,6 +51,7 @@ gformula_survival(
   ipw_cutoff_quantile = NULL,
   ipw_cutoff_value = NULL,
   int_visit_type = NULL,
+  sim_trunc = TRUE,
   ...
 )
 }
@@ -97,6 +100,10 @@ in \code{histories} is to be applied.}
 
 \item{ymodel}{Model statement for the outcome variable.}
 
+\item{ymodel_fit_custom}{Function specifying a custom outcome model. See the vignette "Using Custom Outcome Models in gfoRmula" for details. The default is \code{NULL}.}
+
+\item{ymodel_predict_custom}{Function obtaining predictions from the custom outcome model specified in \code{ymodel_fit_custom}. See the vignette "Using Custom Outcome Models in gfoRmula" for details. The default is \code{NULL}.}
+
 \item{compevent_name}{Character string specifying the name of the competing event variable in \code{obs_data}.}
 
 \item{compevent_model}{Model statement for the competing event variable. The default is \code{NA}.}
@@ -111,19 +118,19 @@ See "Details". The default is \code{FALSE}.}
 
 \item{censor_model}{Model statement for the censoring variable. Only applicable when using inverse probability weights to estimate the natural course means / risk from the observed data. See "Details".}
 
-\item{intvars}{List, whose elements are vectors of character strings. The kth vector in \code{intvars} specifies the name(s) of the variable(s) to be intervened
+\item{intvars}{(Deprecated. See the \code{...} argument) List, whose elements are vectors of character strings. The kth vector in \code{intvars} specifies the name(s) of the variable(s) to be intervened
 on in each round of the simulation under the kth intervention in \code{interventions}.}
 
-\item{interventions}{List, whose elements are lists of vectors. Each list in \code{interventions} specifies a unique intervention on the relevant variable(s) in \code{intvars}. Each vector contains a function
+\item{interventions}{(Deprecated. See the \code{...} argument) List, whose elements are lists of vectors. Each list in \code{interventions} specifies a unique intervention on the relevant variable(s) in \code{intvars}. Each vector contains a function
 implementing a particular intervention on a single variable, optionally
 followed by one or more "intervention values" (i.e.,
 integers used to specify the treatment regime).}
 
-\item{int_times}{List, whose elements are lists of vectors. The kth list in \code{int_times} corresponds to the kth intervention in \code{interventions}. Each vector specifies the time points in which the relevant intervention is applied on the corresponding variable in \code{intvars}.
+\item{int_times}{(Deprecated. See the \code{...} argument) List, whose elements are lists of vectors. The kth list in \code{int_times} corresponds to the kth intervention in \code{interventions}. Each vector specifies the time points in which the relevant intervention is applied on the corresponding variable in \code{intvars}.
 When an intervention is not applied, the simulated natural course value is used. By default, this argument is set so that all interventions are applied in all time points.}
 
 \item{int_descript}{Vector of character strings, each describing an intervention. It must
-be in same order as the entries in \code{interventions}.}
+be in same order as the specified interventions (see the \code{...} argument).}
 
 \item{ref_int}{Integer denoting the intervention to be used as the
 reference for calculating the risk ratio and risk difference. 0 denotes the
@@ -150,14 +157,14 @@ of that covariate given the condition in the second entry is false such that \em
 of the covariate distribution is available; and its fourth entry a value used by the function in the
 third entry. The default is \code{NA}.}
 
-\item{yrestrictions}{List of vectors. Each vector containins as its first entry
+\item{yrestrictions}{List of vectors. Each vector contains as its first entry
 a condition and its second entry an integer. When the
 condition is \code{TRUE}, the outcome variable is simulated
 according to the fitted model; when the condition is \code{FALSE},
 the outcome variable takes on the value in the second entry.
 The default is \code{NA}.}
 
-\item{compevent_restrictions}{List of vectors. Each vector containins as its first entry
+\item{compevent_restrictions}{List of vectors. Each vector contains as its first entry
 a condition and its second entry an integer. When the
 condition is \code{TRUE}, the competing event variable is simulated
 according to the fitted model; when the condition is \code{FALSE},
@@ -205,10 +212,26 @@ In many applications, users may wish to set this argument equal to \code{paralle
 When the kth element is set to \code{FALSE}, the natural value of the treatment variable(s) in the kth intervention in \code{interventions} will be carried forward.
 By default, this argument is set so that the intervened value of the treatment variable(s) is carried forward for all interventions.}
 
-\item{...}{Other arguments, which are passed to the functions in \code{covpredict_custom}.}
+\item{sim_trunc}{Logical scalar indicating whether to truncate simulated covariates to their range in the observed data set. This argument is only applicable for covariates of type \code{"normal"}, \code{"bounded normal"}, \code{"truncated normal"}, and \code{"zero-inflated normal"}. The default is \code{TRUE}.}
+
+\item{...}{Other arguments, including (a) those that specify the interventions and (b) those that are passed to the functions in \code{covpredict_custom}. To specify interventions, users can supply arguments with the following naming requirements
+\itemize{
+\item{Each intervention argument begins with a prefix of \code{intervention}.}
+\item{After the prefix, the intervention number is specified and followed by a period.}
+\item{After the period, the treatment variable name is specified.}
+}
+Each intervention argument takes as input a list with the following elements:
+\itemize{
+\item{The first element specifies the intervention function.}
+\item{The subsequent elements specify any intervention values.}
+\item{(Optional) The named element \code{int_times} specifies the time points to apply the intervention. By default, all interventions are applied at all time points.}
+}
+For example, an "always treat" intervention on \code{A} is given by \cr
+\code{intervention1.A = list(static, rep(1, time_points))} \cr
+See the vignette "A Simplified Approach for Specifying Interventions in gfoRmula" and "Examples" section for more examples.}
 }
 \value{
-An object of class \code{gformula_survival}. The object is a list with the following components:
+An object of class "gformula_survival". The object is a list with the following components:
 \item{result}{Results table containing the estimated risk and risk ratio for all interventions (inculding the natural course) at each time point as well as the "cumulative percent intervened on" and the "average percent intervened on". If bootstrapping was used, the results table includes the bootstrap mean risk ratio, standard error, and 95\% confidence interval.}
 \item{coeffs}{A list of the coefficients of the fitted models.}
 \item{stderrs}{A list of the standard errors of the coefficients of the fitted models.}
@@ -263,9 +286,8 @@ covparams <- list(covmodels = c(L1 ~ lag1_A + lag_cumavg1_L1 + lag_cumavg1_L2 +
                                 A ~ lag1_A + L1 + L2 + lag_cumavg1_L1 +
                                   lag_cumavg1_L2 + L3 + t0))
 ymodel <- Y ~ A + L1 + L2 + L3 + lag1_A + lag1_L1 + lag1_L2 + t0
-intvars <- list('A', 'A')
-interventions <- list(list(c(static, rep(0, time_points))),
-                      list(c(static, rep(1, time_points))))
+intervention1.A <- list(static, rep(0, time_points))
+intervention2.A <- list(static, rep(1, time_points))
 int_descript <- c('Never treat', 'Always treat')
 nsimul <- 10000
 
@@ -275,8 +297,8 @@ gform_basic <- gformula_survival(obs_data = basicdata_nocomp, id = id,
                                  outcome_name = outcome_name,
                                  covtypes = covtypes,
                                  covparams = covparams, ymodel = ymodel,
-                                 intvars = intvars,
-                                 interventions = interventions,
+                                 intervention1.A = intervention1.A,
+                                 intervention2.A = intervention2.A,
                                  int_descript = int_descript,
                                  histories = histories, histvars = histvars,
                                  basecovs = c('L3'), nsimul = nsimul,
@@ -306,9 +328,8 @@ covparams <- list(covlink = c('logit', 'identity', 'logit'),
                                   lag_cumavg1_L2 + L3 + as.factor(t0)))
 ymodel <- Y ~ A + L1 + L2 + lag1_A + lag1_L1 + lag1_L2 + L3 + as.factor(t0)
 compevent_model <- D ~ A + L1 + L2 + lag1_A + lag1_L1 + lag1_L2 + L3 + as.factor(t0)
-intvars <- list('A', 'A')
-interventions <- list(list(c(static, rep(0, time_points))),
-                      list(c(static, rep(1, time_points))))
+intervention1.A <- list(static, rep(0, time_points))
+intervention2.A <- list(static, rep(1, time_points))
 int_descript <- c('Never treat', 'Always treat')
 nsimul <- 10000
 
@@ -320,7 +341,8 @@ gform_basic <- gformula_survival(obs_data = basicdata, id = id,
                                  covtypes = covtypes,
                                  covparams = covparams, ymodel = ymodel,
                                  compevent_model = compevent_model,
-                                 intvars = intvars, interventions = interventions,
+                                 intervention1.A = intervention1.A,
+                                 intervention2.A = intervention2.A,
                                  int_descript = int_descript,
                                  histories = histories, histvars = histvars,
                                  basecovs = c('L3'), nsimul = nsimul,

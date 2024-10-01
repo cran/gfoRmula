@@ -6,6 +6,9 @@
 <!-- badges: start -->
 
 [![CRAN_Status_Badge](https://www.r-pkg.org/badges/version/gfoRmula)](https://cran.r-project.org/package=gfoRmula)
+[![R-CMD-check](https://github.com/CausalInference/gfoRmula/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/CausalInference/gfoRmula/actions/workflows/R-CMD-check.yaml)
+[![Codecov test
+coverage](https://codecov.io/gh/CausalInference/gfoRmula/graph/badge.svg)](https://app.codecov.io/gh/CausalInference/gfoRmula)
 <!-- badges: end -->
 
 ## Installation
@@ -28,4 +31,8 @@ devtools::install_github("CausalInference/gfoRmula")
 
 Please refer to [McGrath et
 al. (2020)](https://doi.org/10.1016/j.patter.2020.100008) for a detailed
-guide to the `gfoRmula` package.
+guide to the `gfoRmula` package. Also, see the following vignettes
+regarding updates since McGrath et al. (2020):
+
+- “A Simplified Approach for Specifying Interventions in gfoRmula”
+- “Using Custom Outcome Models in gfoRmula”

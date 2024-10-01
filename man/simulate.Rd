@@ -9,6 +9,7 @@ simulate(
   fitcov,
   fitY,
   fitD,
+  ymodel_predict_custom,
   yrestrictions,
   compevent_restrictions,
   restrictions,
@@ -40,6 +41,7 @@ simulate(
   show_progress,
   pb,
   int_visit_type,
+  sim_trunc,
   ...
 )
 }
@@ -51,6 +53,8 @@ simulate(
 \item{fitY}{Model fit for the outcome variable.}
 
 \item{fitD}{Model fit for the competing event variable, if any.}
+
+\item{ymodel_predict_custom}{Function obtaining predictions from the custom outcome model specified in \code{ymodel_fit_custom}. See the vignette "Using Custom Outcome Models in gfoRmula" for details.}
 
 \item{yrestrictions}{List of vectors. Each vector containins as its first entry
 a condition and its second entry an integer. When the
@@ -157,6 +161,8 @@ are set to their values at time 0. The default is \code{FALSE}.}
 \item{int_visit_type}{Vector of logicals. The kth element is a logical specifying whether to carry forward the intervened value (rather than the natural value) of the treatment variables(s) when performing a carry forward restriction type for the kth intervention in \code{interventions}.
 When the kth element is set to \code{FALSE}, the natural value of the treatment variable(s) in the kth intervention in \code{interventions} will be carried forward.
 By default, this argument is set so that the intervened value of the treatment variable(s) is carried forward for all interventions.}
+
+\item{sim_trunc}{Logical scalar indicating whether to truncate simulated covariates to their range in the observed data set. This argument is only applicable for covariates of type \code{"normal"}, \code{"bounded normal"}, \code{"truncated normal"}, and \code{"zero-inflated normal"}.}
 
 \item{...}{Other arguments, which are passed to the functions in \code{covpredict_custom}.}
 }

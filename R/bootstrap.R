@@ -48,6 +48,8 @@
 #' @param histvals                List of length two. The first element is a numeric vector specifying the lags used in the model statements (e.g., if \code{lag1_varname} and \code{lag2_varname} were included in the model statements, this vector would be \code{c(1,2)}). The second element is a numeric vector specifying the lag averages used in the model statements.
 #' @param histories               Vector of history functions to apply to the variables specified in \code{histvars}.
 #' @param ymodel                  Model statement for the outcome variable.
+#' @param ymodel_fit_custom       Function specifying a custom outcome model. See the vignette "Using Custom Outcome Models in gfoRmula" for details.
+#' @param ymodel_predict_custom   Function obtaining predictions from the custom outcome model specified in \code{ymodel_fit_custom}. See the vignette "Using Custom Outcome Models in gfoRmula" for details.
 #' @param yrestrictions           List of vectors. Each vector containins as its first entry
 #'                                a condition and its second entry an integer. When the
 #'                                condition is \code{TRUE}, the outcome variable is simulated
@@ -102,6 +104,7 @@
 #' @param int_visit_type          Vector of logicals. The kth element is a logical specifying whether to carry forward the intervened value (rather than the natural value) of the treatment variables(s) when performing a carry forward restriction type for the kth intervention in \code{interventions}.
 #'                                When the kth element is set to \code{FALSE}, the natural value of the treatment variable(s) in the kth intervention in \code{interventions} will be carried forward.
 #'                                By default, this argument is set so that the intervened value of the treatment variable(s) is carried forward for all interventions.
+#' @param sim_trunc               Logical scalar indicating whether to truncate simulated covariates to their range in the observed data set. This argument is only applicable for covariates of type \code{"normal"}, \code{"bounded normal"}, \code{"truncated normal"}, and \code{"zero-inflated normal"}.
 #' @param ...                     Other arguments
 #' @return                        A list with the following components:
 #' \item{Result}{Matrix containing risks over time under the natural course and under each user-specific intervention.}
@@ -115,13 +118,14 @@
 bootstrap_helper <- function(r, time_points, obs_data, bootseeds, outcome_type,
                              intvars, interventions, int_times, ref_int,
                              covparams, covnames, covtypes, covfits_custom, covpredict_custom, basecovs, histvars, histvals, histories,
-                             ymodel, yrestrictions, compevent_restrictions, restrictions,
+                             ymodel, ymodel_fit_custom, ymodel_predict_custom,
+                             yrestrictions, compevent_restrictions, restrictions,
                              comprisk, compevent_model,
                              time_name, outcome_name, compevent_name,
                              ranges, parallel, ncores, max_visits,
                              hazardratio, intcomp, boot_diag, nsimul, baselags,
                              below_zero_indicator, min_time, show_progress, pb,
-                             int_visit_type, ...){
+                             int_visit_type, sim_trunc, ...){
 
   set.seed(bootseeds[r])
 
@@ -143,7 +147,7 @@ bootstrap_helper <- function(r, time_points, obs_data, bootseeds, outcome_type,
                          time_name = time_name, obs_data = resample_data_geq_0,
                          model_fits = FALSE)
   fitY <- pred_fun_Y(ymodel, yrestrictions, outcome_type, outcome_name, time_name, resample_data_geq_0,
-                     model_fits = FALSE)
+                     model_fits = FALSE, ymodel_fit_custom = ymodel_fit_custom)
   if (comprisk){
     fitD <- pred_fun_D(compevent_model, compevent_restrictions, resample_data_geq_0, model_fits = FALSE)
   } else {
@@ -177,6 +181,7 @@ bootstrap_helper <- function(r, time_points, obs_data, bootseeds, outcome_type,
   # Simulate data under different interventions
   pools <- lapply(seq_along(comb_interventions), FUN = function(i){
     simulate(fitcov = fitcov, fitY = fitY, fitD = fitD,
+             ymodel_predict_custom = ymodel_predict_custom,
              yrestrictions = yrestrictions,
              compevent_restrictions = compevent_restrictions,
              restrictions = restrictions,
@@ -193,7 +198,7 @@ bootstrap_helper <- function(r, time_points, obs_data, bootseeds, outcome_type,
              obs_data = resample_data, parallel = FALSE, max_visits = max_visits,
              baselags = baselags, below_zero_indicator = below_zero_indicator,
              min_time = min_time, show_progress = show_progress, pb = pb,
-             int_visit_type = int_visit_type[i], ...)
+             int_visit_type = int_visit_type[i], sim_trunc = sim_trunc, ...)
   })
 
   nat_pool <- pools[[1]] # Simulated data under natural course
@@ -329,25 +334,27 @@ bootstrap_helper <- function(r, time_points, obs_data, bootseeds, outcome_type,
 bootstrap_helper_with_trycatch <- function(r, time_points, obs_data, bootseeds, outcome_type,
                              intvars, interventions, int_times, ref_int,
                              covparams, covnames, covtypes, covfits_custom, covpredict_custom, basecovs, histvars, histvals, histories,
-                             ymodel, yrestrictions, compevent_restrictions, restrictions,
+                             ymodel, ymodel_fit_custom, ymodel_predict_custom,
+                             yrestrictions, compevent_restrictions, restrictions,
                              comprisk, compevent_model,
                              time_name, outcome_name, compevent_name,
                              ranges, parallel, ncores, max_visits,
                              hazardratio, intcomp, boot_diag, nsimul, baselags,
                              below_zero_indicator, min_time, show_progress, pb,
-                             int_visit_type, ...){
+                             int_visit_type, sim_trunc, ...){
   tryCatch({
     bootstrap_helper(
       r = r, time_points = time_points, obs_data = obs_data, bootseeds = bootseeds, outcome_type = outcome_type,
       intvars = intvars, interventions = interventions, int_times = int_times, ref_int = ref_int,
       covparams = covparams, covnames = covnames, covtypes = covtypes, covfits_custom = covfits_custom, covpredict_custom = covpredict_custom, basecovs = basecovs, histvars = histvars, histvals = histvals, histories = histories,
-      ymodel = ymodel, yrestrictions = yrestrictions, compevent_restrictions = compevent_restrictions, restrictions = restrictions,
+      ymodel = ymodel, ymodel_fit_custom = ymodel_fit_custom, ymodel_predict_custom = ymodel_predict_custom,
+      yrestrictions = yrestrictions, compevent_restrictions = compevent_restrictions, restrictions = restrictions,
       comprisk = comprisk, compevent_model = compevent_model,
       time_name = time_name, outcome_name = outcome_name, compevent_name = compevent_name,
       ranges = ranges, parallel = parallel, ncores = ncores, max_visits = max_visits,
       hazardratio = hazardratio, intcomp = intcomp, boot_diag = boot_diag, nsimul = nsimul, baselags = baselags,
       below_zero_indicator = below_zero_indicator, min_time = min_time, show_progress = show_progress, pb = pb,
-      int_visit_type = int_visit_type, ...)
+      int_visit_type = int_visit_type, sim_trunc = sim_trunc, ...)
   },
   error = function(e){
     warning(paste0('An error occured in bootstrap replicate ', r,
