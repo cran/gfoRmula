@@ -1,6 +1,6 @@
-3a62d8fa6042d680d56a72500f713aa3 *DESCRIPTION
+ae73f03208c5ef7e7eb725852be217d0 *DESCRIPTION
 356fb990d3c92c1d06a460b60923448d *NAMESPACE
-efc23b897697ff53690785b525445099 *NEWS.md
+4c2b9e74a42fb4c6addd2307f1077bc8 *NEWS.md
 03dc18156dbfce5265b705678dad9b97 *R/bootstrap.R
 c1bc2ff43d24a44fab37ec3a6824107d *R/comparisons.R
 bf0792e438e7e032dba654aae2e0026b *R/data.R
@@ -12,7 +12,7 @@ bf0792e438e7e032dba654aae2e0026b *R/data.R
 655161ba83e8cd4221d563e600a135f4 *R/pred.R
 eac2796896336f054a182f9877f96050 *R/restrictions.R
 e31ffdb94db6d7188a93081e9f00a98f *R/s3methods.R
-ee4ac60e02238a0011cf0d715594122d *R/simulate.R
+85d85199d023ee9eb87b22db4f166c82 *R/simulate.R
 ae48cef043f49e09d8a32b0bbe7a154c *README.md
 b1b5e36dfe13a30ecd24fae1ab377a2f *build/vignette.rds
 c3401a2ad94524bb615a6da7b1933c34 *data/basicdata.rda
@@ -23,10 +23,10 @@ e38d3b1821bf8993245ab3c7d471ce46 *data/basicdata_nocomp.rda
 b6f2159c88390b79f6851392c48d0f9a *data/continuous_eofdata_pb.rda
 e1705f5ead12a91d794186671f56ccfd *inst/doc/Custom-Outcome-Models.R
 4985ac07f6434b0f51a0e05cbff1e5d4 *inst/doc/Custom-Outcome-Models.Rmd
-766b02e18369723d4f5507b477b7bc91 *inst/doc/Custom-Outcome-Models.html
+48d1bd65f13e0c7d93a0d7986eba0782 *inst/doc/Custom-Outcome-Models.html
 c928de2c047932dd75a2be931b2b1a42 *inst/doc/Intervention-Specification.R
 ed72893234ff2972c363791b86634a48 *inst/doc/Intervention-Specification.Rmd
-a4861905f6d9ce92353fdc147dd542f1 *inst/doc/Intervention-Specification.html
+2c614f4d7b22b2d9751570d187256cb4 *inst/doc/Intervention-Specification.html
 dad5cc76f8fbfd242b66187ad149ccb6 *man/basicdata.Rd
 f7269c14869752697be3b43bede11e9e *man/basicdata_nocomp.Rd
 9f0f2caca089e44329a9b94f3263bacb *man/binary_eofdata.Rd
